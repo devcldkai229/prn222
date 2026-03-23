@@ -1,0 +1,170 @@
+@page
+@model MealPrep.Web.Pages.Dashboard.NutritionSummaryModel
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Dinh Dưỡng Tuần";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">🥗 Tổng Hợp Dinh Dưỡng</h1>
+        <p class="text-gray-400 mt-1">Theo dõi lượng dinh dưỡng nạp vào hàng ngày.</p>
+    </div>
+    <form method="get" class="flex items-center gap-2">
+        <input type="date" name="weekStart" value="@Model.WeekStart.ToString("yyyy-MM-dd")"
+               class="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none" />
+        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition">
+            <i class="bi bi-arrow-right"></i>
+        </button>
+    </form>
+</div>
+
+@if (Model.Summary == null)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">📊</div>
+        <h3 class="text-xl font-bold mb-2">Chưa có dữ liệu</h3>
+        <p class="text-gray-400">Chưa có dữ liệu dinh dưỡng nào cho tuần này.</p>
+    </div>
+}
+else
+{
+    <!-- Weekly summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="glass rounded-2xl p-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Tổng calo</p>
+            <p class="text-2xl font-bold text-emerald-400">@Model.Summary.TotalCalories</p>
+        </div>
+        <div class="glass rounded-2xl p-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Trung bình/ngày</p>
+            <p class="text-2xl font-bold text-blue-400">@Model.Summary.AverageCalories.ToString("0.00")</p>
+        </div>
+        <div class="glass rounded-2xl p-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Mục tiêu/ngày</p>
+            <p class="text-2xl font-bold text-amber-400">@(Model.Summary.DailyCalorieTarget?.ToString() ?? "—")</p>
+        </div>
+        <div class="glass rounded-2xl p-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Số ngày</p>
+            <p class="text-2xl font-bold text-purple-400">@Model.Summary.Days.Count</p>
+        </div>
+    </div>
+
+    <!-- Calorie chart -->
+    <div class="glass rounded-2xl p-5 mb-6">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">Biểu Đồ Calo Theo Ngày</h3>
+        <div class="h-48">
+            <canvas id="calorieChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Daily breakdown -->
+    <div class="space-y-4">
+        @foreach (var day in Model.Summary.Days)
+        {
+            <div class="glass rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center font-bold text-emerald-400">
+                            @day.Date.ToString("dd")
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-sm">@day.Date.ToString("dddd, dd/MM")</h4>
+                            <p class="text-xs text-gray-500">@day.Meals.Count bữa ăn</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-emerald-400">@day.TotalCalories kcal</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="text-center p-2 rounded-xl bg-white/[0.03]">
+                        <p class="text-xs text-gray-500">Protein</p>
+                        <p class="font-bold text-blue-400 text-sm">@day.TotalProteinG.ToString("F1")g</p>
+                    </div>
+                    <div class="text-center p-2 rounded-xl bg-white/[0.03]">
+                        <p class="text-xs text-gray-500">Carbs</p>
+                        <p class="font-bold text-amber-400 text-sm">@day.TotalCarbsG.ToString("F1")g</p>
+                    </div>
+                    <div class="text-center p-2 rounded-xl bg-white/[0.03]">
+                        <p class="text-xs text-gray-500">Fat</p>
+                        <p class="font-bold text-pink-400 text-sm">@day.TotalFatG.ToString("F1")g</p>
+                    </div>
+                </div>
+
+                @if (day.Meals.Count > 0)
+                {
+                    <div class="space-y-2">
+                        @foreach (var meal in day.Meals)
+                        {
+                            <div class="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02]">
+                                @if (meal.ImageUrls?.Length > 0)
+                                {
+                                    <img src="@meal.ImageUrls[0]" alt="@meal.MealName"
+                                         class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                                }
+                                else
+                                {
+                                    <div class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center text-lg flex-shrink-0">🍽️</div>
+                                }
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium truncate">@meal.MealName</p>
+                                    <p class="text-xs text-gray-500">
+                                        @meal.Calories kcal •
+                                        P: @meal.ProteinG.ToString("F0")g •
+                                        C: @meal.CarbsG.ToString("F0")g •
+                                        F: @meal.FatG.ToString("F0")g
+                                        @if (meal.Quantity > 1)
+                                        {
+                                            <span class="text-emerald-400">x@meal.Quantity</span>
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@section Scripts {
+    @if (Model.Summary != null)
+    {
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script>
+            new Chart(document.getElementById('calorieChart'), {
+                type: 'bar',
+                data: {
+                    labels: [@Html.Raw(string.Join(",", Model.Summary.Days.Select(d => $"'{d.Date:dd/MM}'")))],
+                    datasets: [{
+                        label: 'Calo',
+                        data: [@string.Join(",", Model.Summary.Days.Select(d => d.TotalCalories))],
+                        backgroundColor: 'rgba(52,211,153,0.3)',
+                        borderColor: '#34d399',
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }@if (Model.Summary.DailyCalorieTarget.HasValue) {<text>,{
+                        label: 'Mục tiêu',
+                        data: Array(@Model.Summary.Days.Count).fill(@Model.Summary.DailyCalorieTarget.Value),
+                        type: 'line',
+                        borderColor: '#facc15',
+                        borderDash: [5,5],
+                        pointRadius: 0,
+                        fill: false
+                    }</text>}]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
+                    scales: {
+                        x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                        y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+                    }
+                }
+            });
+        </script>
+    }
+}

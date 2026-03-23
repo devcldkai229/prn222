@@ -1,0 +1,297 @@
+@page
+@model MealPrep.Web.Pages.Dashboard.OrdersModel
+@using BusinessObjects.Enums
+@using MealPrep.BLL.Services
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Đơn Hàng Của Tôi";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">📦 Đơn Hàng Của Tôi</h1>
+        <p class="text-gray-400 mt-1">Theo dõi và quản lý đơn hàng của bạn.</p>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+@if (Model.Orders.Count == 0)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">📋</div>
+        <h3 class="text-xl font-bold mb-2">Chưa có đơn hàng</h3>
+        <p class="text-gray-400">Đăng ký gói dịch vụ để bắt đầu nhận đơn hàng.</p>
+        <a href="/Subscription/Plans" class="inline-block mt-4 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold transition">
+            Xem Gói Dịch Vụ
+        </a>
+    </div>
+}
+else
+{
+    <div class="space-y-6" id="orders">
+        @foreach (var grp in Model.Orders.GroupBy(o => new { o.SubscriptionId, o.PlanName, o.SubscriptionStart, o.SubscriptionEnd, o.SubscriptionCreatedAt }).OrderByDescending(g => g.Key.SubscriptionCreatedAt ?? DateTime.MinValue))
+        {
+            <div class="space-y-3">
+                <div class="px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+                    <i class="bi bi-journal-check text-emerald-400 text-lg"></i>
+                    <div>
+                        <h3 class="text-sm font-semibold text-emerald-400">
+                            Gói @(grp.Key.PlanName ?? $"#{grp.Key.SubscriptionId}")
+                        </h3>
+                        <p class="text-xs text-gray-400 mt-0.5">
+                            @(grp.Key.SubscriptionStart?.ToString("dd/MM/yyyy") ?? "—") → @(grp.Key.SubscriptionEnd?.ToString("dd/MM/yyyy") ?? "—")
+                        </p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+        @foreach (var order in grp.OrderBy(o => o.DeliveryDate))
+        {
+            var statusBadge = order.Status switch {
+                OrderStatus.Planned => "bg-gray-500/10 text-gray-400",
+                OrderStatus.Preparing => "bg-amber-500/10 text-amber-400",
+                OrderStatus.Delivering => "bg-blue-500/10 text-blue-400",
+                OrderStatus.InProgress => "bg-yellow-500/10 text-yellow-400",
+                OrderStatus.Delivered => "bg-emerald-500/10 text-emerald-400",
+                OrderStatus.ConfirmedByUser => "bg-purple-500/10 text-purple-400",
+                OrderStatus.Completed => "bg-blue-500/10 text-blue-400",
+                OrderStatus.Cancelled => "bg-red-500/10 text-red-400",
+                OrderStatus.Disputed => "bg-orange-500/10 text-orange-400",
+                _ => "bg-gray-500/10 text-gray-400"
+            };
+            var statusLabel = order.Status switch {
+                OrderStatus.Planned => "Đã lên lịch",
+                OrderStatus.Preparing => "Đang chuẩn bị",
+                OrderStatus.Delivering => "Đang giao",
+                OrderStatus.InProgress => "Đang xử lý",
+                OrderStatus.Delivered => "Đã giao",
+                OrderStatus.ConfirmedByUser => "Đã xác nhận",
+                OrderStatus.Completed => "Hoàn thành",
+                OrderStatus.Cancelled => "Đã hủy",
+                OrderStatus.Disputed => "Tranh chấp",
+                _ => order.Status.ToString()
+            };
+
+            <div class="glass rounded-2xl p-5" id="order-@order.OrderId" data-order-id="@order.OrderId">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <span class="font-bold">Đơn #@order.OrderId</span>
+                        <p class="text-xs text-gray-500">
+                            <i class="bi bi-calendar me-1"></i> @order.DeliveryDate.ToString("dd/MM/yyyy")
+                            <span class="mx-1">•</span>
+                            <i class="bi bi-clock me-1"></i> @order.SlotName
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a href="/Dashboard/OrderDetail?id=@order.OrderId" class="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium rounded-lg transition">
+                            <i class="bi bi-eye me-1"></i> Xem chi tiết
+                        </a>
+                        <span class="order-status-badge px-3 py-1 rounded-lg text-xs font-medium @statusBadge">@statusLabel</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2 mb-4">
+                    @foreach (var item in order.Items)
+                    {
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03]" data-order-item-id="@item.OrderItemId" id="item-@item.OrderItemId">
+                            @if (item.MealImages?.Length > 0)
+                            {
+                                <img src="@item.MealImages[0]" alt="@item.MealName"
+                                     class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                            }
+                            else
+                            {
+                                <div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-xl flex-shrink-0">🍽️</div>
+                            }
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap mb-0.5">
+                                    <span class="px-1.5 py-0.5 rounded text-xs bg-amber-500/20 text-amber-600">@item.DeliverySlotName</span>
+                                    <span class="item-status-text text-xs text-gray-500">@item.Status</span>
+                                </div>
+                                <p class="text-sm font-medium truncate">@item.MealName</p>
+                                @if (item.IsDelivered)
+                                {
+                                    <p class="text-xs text-emerald-400"><i class="bi bi-check-circle-fill me-1"></i>Đã giao</p>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Actions: Delivered = confirm + dispute; Disputed = confirm only (sau khi Admin xử lý) -->
+                @if (order.Status == OrderStatus.Delivered)
+                {
+                    <div class="flex gap-2" id="order-@order.OrderId-actions">
+                        <button onclick="confirmReceipt(@order.OrderId)"
+                                class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-xl transition"
+                                id="confirm-@order.OrderId">
+                            <i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng
+                        </button>
+                        <button onclick="showReportModal(@order.OrderId)"
+                                class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-xl transition">
+                            <i class="bi bi-exclamation-triangle me-1"></i> Chưa nhận được hàng
+                        </button>
+                    </div>
+                }
+                else if (order.Status == OrderStatus.Disputed)
+                {
+                    <div class="flex gap-2" id="order-@order.OrderId-actions">
+                        <p class="text-xs text-amber-400 mb-1">Đơn đang tranh chấp. Sau khi Admin xử lý xong, xin bấm xác nhận.</p>
+                        <button onclick="confirmReceipt(@order.OrderId)"
+                                class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-xl transition"
+                                id="confirm-@order.OrderId">
+                            <i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Report Modal -->
+<div id="reportModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4" onclick="hideReportModal()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2 text-red-400"><i class="bi bi-exclamation-triangle me-2"></i>Báo Cáo Đơn Hàng</h3>
+        <input type="hidden" id="reportOrderId" />
+        <div class="mb-4">
+            <label class="block text-xs text-gray-500 mb-1">Ghi chú</label>
+            <textarea id="reportNote" rows="3" placeholder="Mô tả vấn đề..."
+                      class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-red-500 focus:outline-none resize-none"></textarea>
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button onclick="hideReportModal()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition">Hủy</button>
+            <button onclick="reportMissing()" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm transition">
+                Gửi Báo Cáo
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+
+        async function confirmReceipt(orderId) {
+            const btn = document.getElementById(`confirm-${orderId}`);
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>';
+
+            try {
+                const res = await fetch(`?handler=ConfirmReceipt&orderId=${orderId}`, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': token }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message);
+                    updateUserOrderStatus(orderId, 'ConfirmedByUser');
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng';
+                }
+            } catch {
+                showToast('Lỗi kết nối.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng';
+            }
+        }
+
+        function showReportModal(orderId) {
+            document.getElementById('reportOrderId').value = orderId;
+            document.getElementById('reportNote').value = '';
+            document.getElementById('reportModal').classList.remove('hidden');
+        }
+        function hideReportModal() {
+            document.getElementById('reportModal').classList.add('hidden');
+        }
+
+        async function reportMissing() {
+            const orderId = document.getElementById('reportOrderId').value;
+            const note = document.getElementById('reportNote').value;
+
+            try {
+                const res = await fetch(`?handler=ReportMissing&orderId=${orderId}&note=${encodeURIComponent(note)}`, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': token }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message);
+                    hideReportModal();
+                    updateUserOrderStatus(parseInt(orderId, 10), 'Disputed');
+                }
+            } catch {
+                showToast('Lỗi kết nối.', 'error');
+            }
+        }
+
+        // SignalR - real-time order status (no reload)
+        const USER_ORDER_STATUS_MAP = {
+            'Planned': { label: 'Đã lên lịch', badge: 'bg-gray-500/10 text-gray-400' },
+            'Preparing': { label: 'Đang chuẩn bị', badge: 'bg-amber-500/10 text-amber-400' },
+            'Delivering': { label: 'Đang giao', badge: 'bg-blue-500/10 text-blue-400' },
+            'Delivered': { label: 'Đã giao', badge: 'bg-emerald-500/10 text-emerald-400' },
+            'ConfirmedByUser': { label: 'Đã xác nhận', badge: 'bg-purple-500/10 text-purple-400' },
+            'Cancelled': { label: 'Đã hủy', badge: 'bg-red-500/10 text-red-400' },
+            'InProgress': { label: 'Đang xử lý', badge: 'bg-yellow-500/10 text-yellow-400' },
+            'Completed': { label: 'Hoàn thành', badge: 'bg-blue-500/10 text-blue-400' },
+            'Disputed': { label: 'Tranh chấp', badge: 'bg-orange-500/10 text-orange-400' }
+        };
+        function updateUserOrderStatus(orderId, newStatus) {
+            const card = document.querySelector(`#order-${orderId}, [data-order-id="${orderId}"]`);
+            if (!card) return;
+            const badge = card.querySelector('.order-status-badge');
+            if (badge) {
+                const map = USER_ORDER_STATUS_MAP[newStatus] || { label: newStatus, badge: 'bg-gray-500/10 text-gray-400' };
+                badge.textContent = map.label;
+                badge.className = 'order-status-badge px-3 py-1 rounded-lg text-xs font-medium ' + map.badge;
+            }
+            if (newStatus === 'ConfirmedByUser') {
+                const actions = document.getElementById(`order-${orderId}-actions`);
+                if (actions) actions.outerHTML = '<span class="text-xs text-purple-500 font-medium"><i class="bi bi-patch-check-fill me-1"></i>Đã xác nhận</span>';
+            }
+            if (newStatus === 'Disputed') {
+                const actions = document.getElementById(`order-${orderId}-actions`);
+                if (actions) actions.outerHTML = '<p class="text-xs text-amber-400 mb-1">Đơn đang tranh chấp. Sau khi Admin xử lý xong, xin bấm xác nhận.</p><button onclick="confirmReceipt(' + orderId + ')" class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-xl" id="confirm-' + orderId + '"><i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng</button>';
+            }
+        }
+
+        const userId = '@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "")';
+        const orderConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order').withAutomaticReconnect().build();
+        const trackConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order-tracking').withAutomaticReconnect().build();
+
+        orderConn.on('ReceiveOrderStatusUpdate', (orderId, newStatus) => {
+            if (typeof orderId === 'number') {
+                updateUserOrderStatus(orderId, newStatus);
+                if (typeof showToast === 'function') showToast('Đơn #' + orderId + ' đã cập nhật trạng thái');
+            }
+        });
+        trackConn.on('OrderItemStatusChanged', (orderItemId, orderId, status, proofUrl) => {
+            const itemEl = document.querySelector(`[data-order-item-id="${orderItemId}"]`);
+            if (!itemEl) return;
+            const statusEl = itemEl.querySelector('.item-status-text');
+            if (statusEl) statusEl.textContent = status || '';
+            const inner = itemEl.querySelector('.flex-1.min-w-0');
+            if (inner) {
+                let badge = inner.querySelector('.text-emerald-400');
+                if ((status === 'Delivered' || proofUrl) && !badge) {
+                    const p = document.createElement('p');
+                    p.className = 'text-xs text-emerald-400';
+                    p.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Đã giao';
+                    inner.appendChild(p);
+                }
+            }
+        });
+        trackConn.on('OrderStatusChanged', (orderId, status, source) => {
+            if (typeof orderId === 'number') updateUserOrderStatus(orderId, status);
+        });
+
+        orderConn.start().catch(console.error);
+        trackConn.start().then(() => trackConn.invoke('JoinUserGroup', userId)).catch(console.error);
+    </script>
+}

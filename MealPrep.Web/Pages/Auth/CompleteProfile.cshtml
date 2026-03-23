@@ -1,0 +1,96 @@
+@page
+@model MealPrep.Web.Pages.Auth.CompleteProfileModel
+@{
+    ViewData["Title"] = "Hoàn Tất Hồ Sơ";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — MealPrep</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-gradient-to-br from-emerald-50 via-white to-teal-50 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-lg">
+        <!-- Progress -->
+        <div class="flex items-center justify-center gap-3 mb-8">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm font-bold">1</div>
+                <span class="text-sm font-medium text-emerald-700">Thông Tin Cá Nhân</span>
+            </div>
+            <div class="w-12 h-0.5 bg-gray-200"></div>
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-400 flex items-center justify-center text-sm font-bold">2</div>
+                <span class="text-sm text-gray-400">Dinh Dưỡng</span>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+                    <i class="bi bi-person-badge text-3xl text-emerald-600"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900">Hoàn Tất Hồ Sơ</h1>
+                <p class="text-sm text-gray-500 mt-1">Thêm thông tin cá nhân để trải nghiệm tốt hơn</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-6 text-red-600 text-sm">
+                    <i class="bi bi-exclamation-circle me-1"></i>@Model.ErrorMessage
+                </div>
+            }
+
+            <form method="post" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Số Điện Thoại</label>
+                    <input type="tel" asp-for="Input.PhoneNumber" placeholder="0912345678"
+                           class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition" />
+                    <span asp-validation-for="Input.PhoneNumber" class="text-xs text-red-500 mt-1"></span>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Giới Tính</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        @foreach (var g in Enum.GetValues<BusinessObjects.Enums.Gender>())
+                        {
+                            var icon = g switch { BusinessObjects.Enums.Gender.Male => "bi-gender-male", BusinessObjects.Enums.Gender.Female => "bi-gender-female", _ => "bi-gender-ambiguous" };
+                            var label = g switch { BusinessObjects.Enums.Gender.Male => "Nam", BusinessObjects.Enums.Gender.Female => "Nữ", _ => "Khác" };
+                            <label class="cursor-pointer">
+                                <input type="radio" asp-for="Input.Gender" value="@g" class="peer hidden" />
+                                <div class="peer-checked:bg-emerald-50 peer-checked:border-emerald-500 peer-checked:text-emerald-700 border border-gray-200 rounded-xl p-3 text-center text-sm font-medium text-gray-600 hover:bg-gray-50 transition">
+                                    <i class="bi @icon text-lg block mb-1"></i>@label
+                                </div>
+                            </label>
+                        }
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">Tuổi</label>
+                    <input type="number" asp-for="Input.Age" min="10" max="120" placeholder="25"
+                           class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition" />
+                    <span asp-validation-for="Input.Age" class="text-xs text-red-500 mt-1"></span>
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 flex items-center justify-center gap-2">
+                    Tiếp Tục <i class="bi bi-arrow-right"></i>
+                </button>
+
+                <a href="/Dashboard" class="block text-center text-sm text-gray-400 hover:text-gray-600 transition mt-2">
+                    Bỏ qua, thiết lập sau
+                </a>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>

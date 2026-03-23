@@ -1,0 +1,100 @@
+@page
+@model MealPrep.Web.Pages.Admin.Plans.IndexModel
+@using BusinessObjects.Entities
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Quản Lý Gói Dịch Vụ";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">📦 Quản Lý Gói Dịch Vụ</h1>
+    <a href="/Admin/Plans/CreateEdit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm transition">
+        <i class="bi bi-plus-lg me-1"></i> Thêm Gói
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-check-circle me-1"></i> @Model.SuccessMessage
+    </div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-exclamation-circle me-1"></i> @Model.ErrorMessage
+    </div>
+}
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    @foreach (var plan in Model.Plans)
+    {
+        <div class="glass rounded-2xl overflow-hidden @(!plan.IsActive ? "opacity-60" : "")">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">@plan.Name</h3>
+                    @if (plan.IsActive)
+                    {
+                        <span class="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs">Hoạt động</span>
+                    }
+                    else
+                    {
+                        <span class="px-2 py-1 bg-red-500/10 text-red-400 rounded-lg text-xs">Ngưng</span>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(plan.Description))
+                {
+                    <p class="text-sm text-gray-400 mb-4">@plan.Description</p>
+                }
+
+                <div class="space-y-2 mb-4">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Thời hạn</span>
+                        <span>@plan.DurationDays ngày</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Bữa/ngày</span>
+                        <span>@plan.MealsPerDay</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Giá cơ bản</span>
+                        <span class="text-emerald-400 font-bold">@plan.BasePrice.ToString("N0")₫</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Giá thêm</span>
+                        <span>@plan.ExtraPrice.ToString("N0")₫</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <a href="/Admin/Plans/CreateEdit?planId=@plan.Id"
+                       class="flex-1 text-center px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded-lg transition">
+                        <i class="bi bi-pencil me-1"></i> Sửa
+                    </a>
+                    <form method="post" asp-page-handler="Toggle" class="flex-1">
+                        <input type="hidden" name="planId" value="@plan.Id" />
+                        <button type="submit"
+                                class="w-full px-3 py-2 text-xs rounded-lg transition
+                                @(plan.IsActive ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400" : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400")">
+                            <i class="bi bi-toggle-@(plan.IsActive ? "on" : "off") me-1"></i>
+                            @(plan.IsActive ? "Tắt" : "Bật")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@if (Model.Plans.Count == 0)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">📦</div>
+        <h3 class="text-xl font-bold mb-2">Chưa có gói dịch vụ</h3>
+        <p class="text-gray-400 mb-4">Tạo gói dịch vụ đầu tiên để bắt đầu.</p>
+        <a href="/Admin/Plans/CreateEdit" class="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold transition inline-block">
+            <i class="bi bi-plus-lg me-1"></i> Thêm Gói
+        </a>
+    </div>
+}

@@ -1,0 +1,70 @@
+@page
+@model MealPrep.Web.Pages.Subscription.MySubscriptionsModel
+@{
+    ViewData["Title"] = "Gói Đăng Ký Của Tôi";
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">Gói Đăng Ký Của Tôi</h1>
+        <a href="/Subscription/Plans" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition">
+            <i class="bi bi-plus-lg me-1"></i>Đăng Ký Mới
+        </a>
+    </div>
+
+    @if (!Model.Subscriptions.Any())
+    {
+        <div class="glass rounded-2xl p-12 text-center">
+            <i class="bi bi-bookmark-x text-5xl text-gray-300"></i>
+            <p class="mt-4 text-gray-500">Bạn chưa có gói đăng ký nào.</p>
+            <a href="/Subscription/Plans" class="inline-block mt-4 px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition">
+                Xem Gói Dịch Vụ
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="grid gap-4">
+            @foreach (var sub in Model.Subscriptions)
+            {
+                var statusColor = sub.Status switch
+                {
+                    BusinessObjects.Enums.SubscriptionStatus.Active => "emerald",
+                    BusinessObjects.Enums.SubscriptionStatus.PendingPayment => "amber",
+                    BusinessObjects.Enums.SubscriptionStatus.Cancelled => "red",
+                    BusinessObjects.Enums.SubscriptionStatus.Expired => "gray",
+                    _ => "blue"
+                };
+                var statusText = sub.Status switch
+                {
+                    BusinessObjects.Enums.SubscriptionStatus.Active => "Đang Hoạt Động",
+                    BusinessObjects.Enums.SubscriptionStatus.PendingPayment => "Chờ Thanh Toán",
+                    BusinessObjects.Enums.SubscriptionStatus.Cancelled => "Đã Hủy",
+                    BusinessObjects.Enums.SubscriptionStatus.Expired => "Hết Hạn",
+                    _ => sub.Status.ToString()
+                };
+
+                <a href="/Subscription/Detail?id=@sub.Id" class="glass rounded-2xl p-6 hover:shadow-md transition block">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h3 class="text-lg font-semibold text-gray-900">@sub.PlanName</h3>
+                                <span class="px-3 py-0.5 rounded-full text-xs font-medium bg-@(statusColor)-100 text-@(statusColor)-700 border border-@(statusColor)-200">
+                                    @statusText
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-4 text-sm text-gray-500">
+                                <span><i class="bi bi-calendar3 me-1"></i>@sub.StartDate.ToString("dd/MM/yyyy") — @(sub.EndDate?.ToString("dd/MM/yyyy") ?? "...")</span>
+                                <span><i class="bi bi-cup-hot me-1"></i>@sub.MealsPerDay bữa/ngày</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xl font-bold text-emerald-600">@sub.TotalAmount.ToString("N0") ₫</p>
+                            <p class="text-xs text-gray-400">@sub.CreatedAt.ToString("dd/MM/yyyy HH:mm")</p>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>

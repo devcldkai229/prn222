@@ -1,0 +1,169 @@
+@page
+@model MealPrep.Web.Pages.Admin.Meals.IndexModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Quản Lý Món Ăn";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">🍽️ Quản Lý Món Ăn</h1>
+    <a href="/Admin/Meals/CreateEdit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm transition">
+        <i class="bi bi-plus-lg me-1"></i> Thêm Món
+    </a>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-check-circle me-1"></i> @Model.SuccessMessage
+    </div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-exclamation-circle me-1"></i> @Model.ErrorMessage
+    </div>
+}
+
+<!-- Filters -->
+<form method="get" class="glass rounded-2xl p-4 mb-6">
+    <div class="flex flex-wrap gap-3 items-end">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs text-gray-500 mb-1">Tìm kiếm</label>
+            <input type="text" name="Search" value="@Model.Search" placeholder="Tên món ăn..."
+                   class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none" />
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Trạng thái</label>
+            <select name="IsActive" class="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none">
+                <option value="">Tất cả</option>
+                <option value="true" selected="@(Model.IsActive == true)">Hoạt động</option>
+                <option value="false" selected="@(Model.IsActive == false)">Ngưng</option>
+            </select>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm transition">
+            <i class="bi bi-search me-1"></i> Lọc
+        </button>
+    </div>
+</form>
+
+<!-- Meals Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+    @foreach (var meal in Model.Result.Items)
+    {
+        <div class="glass rounded-2xl overflow-hidden group meal-card" data-meal-id="@meal.Id">
+            <!-- Image -->
+            @if (!string.IsNullOrEmpty(meal.ThumbnailUrl))
+            {
+                <div class="h-36 overflow-hidden">
+                    <img src="@meal.ThumbnailUrl" alt="@meal.Name"
+                         class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                </div>
+            }
+            else if (meal.Images?.Length > 0)
+            {
+                <div class="h-36 overflow-hidden">
+                    <img src="@meal.Images[0]" alt="@meal.Name"
+                         class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                </div>
+            }
+            else
+            {
+                <div class="h-36 bg-white/5 flex items-center justify-center text-4xl">🍽️</div>
+            }
+
+            <div class="p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-bold text-sm truncate">@meal.Name</h3>
+                    @if (meal.IsActive)
+                    {
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" title="Hoạt động"></span>
+                    }
+                    else
+                    {
+                        <span class="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" title="Ngưng"></span>
+                    }
+                </div>
+
+                <div class="flex gap-2 text-xs text-gray-500 mb-2">
+                    <span>@meal.Calories kcal</span>
+                    <span>•</span>
+                    <span>P:@meal.Protein</span>
+                    <span>C:@meal.Carbs</span>
+                    <span>F:@meal.Fat</span>
+                </div>
+
+                <div class="flex items-center gap-1 text-xs mb-3 meal-avg-row" data-meal-id="@meal.Id" style="@(meal.AvgRating.HasValue ? "" : "display:none")">
+                    <i class="bi bi-star-fill text-amber-400"></i>
+                    <span class="meal-avg-value">@(meal.AvgRating?.ToString("0.0") ?? "0")</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <a href="/Admin/Meals/CreateEdit?mealId=@meal.Id"
+                       class="flex-1 text-center px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded-lg transition">
+                        <i class="bi bi-pencil"></i> Sửa
+                    </a>
+                    <button onclick="showDeleteModal(@meal.Id, '@meal.Name.Replace("'", "\\'")' )"
+                            class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded-lg transition">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Paginator -->
+@if (Model.Result.TotalPages > 1)
+{
+    <div class="flex items-center justify-center gap-1">
+        @for (int i = 1; i <= Model.Result.TotalPages; i++)
+        {
+            <a href="?PageIndex=@i&Search=@Model.Search&IsActive=@Model.IsActive"
+               class="w-8 h-8 flex items-center justify-center text-xs rounded-lg transition
+               @(i == Model.Result.Page ? "bg-emerald-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10")">
+                @i
+            </a>
+        }
+    </div>
+}
+
+<!-- Delete Modal -->
+<div id="deleteModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4" onclick="hideDeleteModal()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2 text-red-400"><i class="bi bi-exclamation-triangle me-2"></i>Vô hiệu hóa món ăn</h3>
+        <p class="text-sm text-gray-400 mb-4">
+            Nhập <strong class="text-white">CONFIRM</strong> để xác nhận vô hiệu hóa món <span id="deleteMealName" class="text-white font-semibold"></span>.
+        </p>
+        <input type="text" id="deleteConfirmInput" placeholder="Nhập CONFIRM"
+               class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-red-500 focus:outline-none mb-4" />
+        <form method="post" asp-page-handler="Delete" id="deleteForm">
+            <input type="hidden" name="mealId" id="deleteMealId" />
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="hideDeleteModal()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition">Hủy</button>
+                <button type="submit" id="deleteBtn" disabled
+                        class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm transition disabled:opacity-50">
+                    Vô hiệu hóa
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showDeleteModal(mealId, mealName) {
+            document.getElementById('deleteMealId').value = mealId;
+            document.getElementById('deleteMealName').textContent = mealName;
+            document.getElementById('deleteConfirmInput').value = '';
+            document.getElementById('deleteBtn').disabled = true;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+        function hideDeleteModal() { document.getElementById('deleteModal').classList.add('hidden'); }
+
+        document.getElementById('deleteConfirmInput').addEventListener('input', function () {
+            document.getElementById('deleteBtn').disabled = this.value !== 'CONFIRM';
+        });
+    </script>
+}

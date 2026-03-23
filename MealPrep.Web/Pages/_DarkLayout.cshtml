@@ -1,0 +1,280 @@
+@using System.Security.Claims
+@{
+    var fullName = User.FindFirstValue(ClaimTypes.Name) ?? "User";
+    var role = User.FindFirstValue(ClaimTypes.Role) ?? "User";
+    var initials = fullName.Length > 0 ? fullName[0].ToString().ToUpper() : "U";
+}
+
+@* Admin → Admin; Shipper → Shipper (không dùng User UI) *@
+@if (User.IsInRole("Admin") && !Context.Request.Path.StartsWithSegments("/Auth"))
+{
+    Context.Response.Redirect("/Admin");
+    IgnoreSection("Scripts");
+    IgnoreSection("Styles");
+    return;
+}
+@if (User.IsInRole("Shipper") && !User.IsInRole("Admin") && Context.Request.Path.StartsWithSegments("/Dashboard"))
+{
+    Context.Response.Redirect("/Shipper/Dashboard");
+    IgnoreSection("Scripts");
+    IgnoreSection("Styles");
+    return;
+}
+
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — MealPrep</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { fontFamily: { sans: ['Inter','system-ui','sans-serif'] } } }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; background: #f1f5f9; color: #1e293b; }
+
+        /* ── Card / Glass → white card ── */
+        .glass {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+
+        /* ── Navbar ── */
+        nav.main-nav {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .nav-link {
+            color: #64748b;
+            transition: color 0.15s, background 0.15s;
+            border-radius: 8px;
+        }
+        .nav-link:hover { color: #059669; background: #f0fdf4; }
+        .nav-link.active { color: #059669; background: #ecfdf5; font-weight: 600; }
+
+        /* ── Override dark Tailwind utility classes ── */
+        .text-white { color: #1e293b !important; }
+        .text-gray-300 { color: #475569 !important; }
+        .text-gray-400 { color: #64748b !important; }
+        .text-gray-500 { color: #94a3b8 !important; }
+        .text-gray-600 { color: #64748b !important; }
+
+        /* Colored text: darken for light bg */
+        .text-emerald-400 { color: #059669 !important; }
+        .text-red-400 { color: #dc2626 !important; }
+        .text-blue-400 { color: #2563eb !important; }
+        .text-yellow-400 { color: #d97706 !important; }
+        .text-amber-400 { color: #d97706 !important; }
+        .text-orange-400 { color: #ea580c !important; }
+        .text-purple-400 { color: #7c3aed !important; }
+        .text-pink-400 { color: #db2777 !important; }
+
+        /* Dark bg patterns → light equivalents */
+        [class*="bg-white/"] { background-color: #f8fafc !important; }
+        [class*="border-white/"] { border-color: #e2e8f0 !important; }
+        .bg-\[#0a0a0f\] { background: #f1f5f9 !important; }
+
+        /* Transparent colored bg → light tints */
+        .bg-emerald-500\/10, .bg-emerald-500\/20 { background-color: #ecfdf5 !important; }
+        .bg-red-500\/10, .bg-red-500\/20 { background-color: #fef2f2 !important; }
+        .bg-blue-500\/10, .bg-blue-500\/20 { background-color: #eff6ff !important; }
+        .bg-yellow-500\/10 { background-color: #fffbeb !important; }
+        .bg-amber-500\/10 { background-color: #fffbeb !important; }
+        .bg-orange-500\/10 { background-color: #fff7ed !important; }
+        .bg-purple-500\/10 { background-color: #f5f3ff !important; }
+        .bg-pink-500\/10 { background-color: #fdf2f8 !important; }
+        .bg-gray-500\/10 { background-color: #f8fafc !important; }
+
+        /* Colored border transparent */
+        .border-emerald-500\/20, .border-emerald-500\/15, .border-emerald-500\/30,
+        .border-emerald-500\/40 { border-color: #a7f3d0 !important; }
+        .border-red-500\/20, .border-red-500\/30 { border-color: #fecaca !important; }
+        .border-blue-500\/15, .border-blue-500\/20 { border-color: #bfdbfe !important; }
+
+        /* Hover transparent bg */
+        .hover\:bg-white\/5:hover, .hover\:bg-white\/10:hover,
+        .hover\:bg-white\/15:hover, .hover\:bg-white\/20:hover { background-color: #f1f5f9 !important; }
+
+        /* Drop gradient text on white-to-gray (would be invisible) */
+        .from-white.to-gray-300 { -webkit-text-fill-color: #1e293b; }
+        .bg-clip-text.text-transparent.from-white { -webkit-text-fill-color: #1e293b; }
+
+        /* Ring */
+        .ring-emerald-500\/20, .ring-1 { --tw-ring-color: #a7f3d0; }
+
+        /* Toast override */
+        #toastContainer .glass {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+
+        /* Modal overlay stays dark */
+        .fixed.inset-0.bg-black\/60 { background: rgba(0,0,0,0.5) !important; }
+        .fixed.inset-0.bg-black\/40 { background: rgba(0,0,0,0.4) !important; }
+    </style>
+
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="bg-slate-100 text-gray-900 min-h-screen">
+
+    <!-- NAVBAR -->
+    <nav class="main-nav sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="/Dashboard" class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
+                        <i class="bi bi-leaf text-white text-sm"></i>
+                    </div>
+                    <span class="text-lg font-bold text-gray-900">MealPrep</span>
+                </a>
+
+                <!-- Nav Links -->
+                <div class="hidden md:flex items-center gap-1">
+                    @if (User.IsInRole("Shipper"))
+                    {
+                        <a href="/Shipper/Dashboard"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path == "/Shipper/Dashboard" ? "active" : "")">
+                            <i class="bi bi-speedometer2 me-1"></i>Dashboard
+                        </a>
+                        <a href="/Shipper/Delivery"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path.StartsWithSegments("/Shipper/Delivery") ? "active" : "")">
+                            <i class="bi bi-truck me-1"></i>Giao Hàng
+                        </a>
+                    }
+                    else
+                    {
+                        <a href="/Dashboard"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path == "/Dashboard" || Context.Request.Path == "/Dashboard/Index" ? "active" : "")">
+                            <i class="bi bi-grid-1x2 me-1"></i>Bảng Điều Khiển
+                        </a>
+                        <a href="/Subscription/Plans"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path.StartsWithSegments("/Subscription") ? "active" : "")">
+                            <i class="bi bi-bookmark-star me-1"></i>Đăng Ký
+                        </a>
+                        <a href="/Meal"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path.StartsWithSegments("/Meal") ? "active" : "")">
+                            <i class="bi bi-cup-hot me-1"></i>Món Ăn
+                        </a>
+                        <a href="/Feedback"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path.StartsWithSegments("/Feedback") ? "active" : "")">
+                            <i class="bi bi-star me-1"></i>Đánh Giá
+                        </a>
+                        <a href="/Profile/Nutrition"
+                           class="nav-link px-4 py-2 text-sm font-medium @(Context.Request.Path.StartsWithSegments("/Profile") ? "active" : "")">
+                            <i class="bi bi-heart-pulse me-1"></i>Dinh Dưỡng
+                        </a>
+                    }
+                </div>
+
+                <!-- User Menu -->
+                <div class="flex items-center gap-3">
+                    <div class="relative">
+                        <button onclick="toggleUserMenu()"
+                                class="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-sm font-bold text-white">
+                                @initials
+                            </div>
+                            <span class="text-sm text-gray-700 hidden sm:inline font-medium">@fullName</span>
+                            <i class="bi bi-chevron-down text-xs text-gray-400"></i>
+                        </button>
+                        <div id="userDropdown"
+                             class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-white border border-gray-200 shadow-lg py-2 z-50">
+                            <div class="px-4 py-2 border-b border-gray-100">
+                                <p class="text-sm font-semibold text-gray-900">@fullName</p>
+                                <p class="text-xs text-gray-500">@role</p>
+                            </div>
+                            <a href="/Profile/Nutrition"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-emerald-600 hover:bg-emerald-50">
+                                <i class="bi bi-person"></i> Hồ Sơ
+                            </a>
+                            <a href="/Subscription/MySubscriptions"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-emerald-600 hover:bg-emerald-50">
+                                <i class="bi bi-bookmark-star"></i> Gói Đăng Ký
+                            </a>
+                            <a href="/Feedback/MySummary"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-emerald-600 hover:bg-emerald-50">
+                                <i class="bi bi-bar-chart"></i> Thống Kê Đánh Giá
+                            </a>
+                            <a href="/NutritionLog"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-emerald-600 hover:bg-emerald-50">
+                                <i class="bi bi-journal-text"></i> Nhật Ký Dinh Dưỡng
+                            </a>
+                            <a href="/Dashboard/Orders"
+                               class="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-emerald-600 hover:bg-emerald-50">
+                                <i class="bi bi-bag"></i> Đơn Hàng
+                            </a>
+                            <div class="border-t border-gray-100 mt-1 pt-1">
+                                <a href="/Auth/Logout"
+                                   class="flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50">
+                                    <i class="bi bi-box-arrow-right"></i> Đăng Xuất
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Nav -->
+        <div class="md:hidden border-t border-gray-100 px-4 py-2 flex gap-1 overflow-x-auto">
+            @if (User.IsInRole("Shipper"))
+            {
+                <a href="/Shipper/Dashboard" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Dashboard</a>
+                <a href="/Shipper/Delivery" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Giao Hàng</a>
+            }
+            else
+            {
+                <a href="/Dashboard" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Dashboard</a>
+                <a href="/Subscription/Plans" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Đăng Ký</a>
+                <a href="/Meal" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Món Ăn</a>
+                <a href="/Feedback" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Đánh Giá</a>
+                <a href="/Profile/Nutrition" class="nav-link px-3 py-1.5 text-xs font-medium whitespace-nowrap">Dinh Dưỡng</a>
+            }
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        @RenderBody()
+    </main>
+
+    <div id="toastContainer" class="fixed top-20 right-4 z-[9999] flex flex-col gap-2"></div>
+
+    <script>
+        function toggleUserMenu() {
+            document.getElementById('userDropdown').classList.toggle('hidden');
+        }
+        document.addEventListener('click', e => {
+            const d = document.getElementById('userDropdown');
+            if (!e.target.closest('[onclick="toggleUserMenu()"]') && !e.target.closest('#userDropdown')) {
+                d?.classList.add('hidden');
+            }
+        });
+
+        function showToast(message, type = 'success') {
+            const c = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            const isOk = type === 'success';
+            t.className = `bg-white border shadow-lg px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${isOk ? 'text-emerald-700 border-emerald-200' : 'text-red-600 border-red-200'}`;
+            t.innerHTML = `<i class="bi ${isOk ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'}"></i> ${message}`;
+            c.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(100px)'; t.style.transition = '.3s'; setTimeout(() => t.remove(), 300); }, 4000);
+        }
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

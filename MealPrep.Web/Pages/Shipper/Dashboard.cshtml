@@ -1,0 +1,142 @@
+@page
+@model MealPrep.Web.Pages.Shipper.DashboardModel
+@{
+    ViewData["Title"] = "Shipper Dashboard";
+}
+
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold text-gray-900">
+        <i class="bi bi-truck me-2 text-emerald-500"></i>Dashboard Giao Hàng
+    </h1>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-3xl font-bold text-blue-600">@Model.TotalOrders</p>
+            <p class="text-sm text-gray-500 mt-1">Tổng đơn hôm nay</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-3xl font-bold text-amber-500">@Model.PendingOrders</p>
+            <p class="text-sm text-gray-500 mt-1">Đang chờ giao</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-3xl font-bold text-emerald-600">@Model.CompletedOrders</p>
+            <p class="text-sm text-gray-500 mt-1">Đã hoàn thành</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-3xl font-bold text-purple-600">@Model.DeliveredItems / @Model.TotalItems</p>
+            <p class="text-sm text-gray-500 mt-1">Món đã giao</p>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    @if (Model.TotalItems > 0)
+    {
+        var pct = (double)Model.DeliveredItems / Model.TotalItems * 100;
+        <div class="glass rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium text-gray-700">Tiến Độ Hôm Nay</h3>
+                <span class="text-sm font-semibold text-emerald-600">@pct.ToString("F0")%</span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
+                <div class="bg-gradient-to-r from-emerald-400 to-emerald-600 h-full rounded-full transition-all" style="width: @pct%"></div>
+            </div>
+        </div>
+    }
+
+    <!-- Orders list (ShipperId = current UserId) -->
+    @if (Model.TodaysOrders.Any())
+    {
+        <div class="glass rounded-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="font-bold text-gray-800">📦 Đơn Hàng Hôm Nay</h3>
+                <a href="/Shipper/Delivery" class="text-sm text-emerald-600 hover:text-emerald-700 font-medium">Xem chi tiết →</a>
+            </div>
+            <div class="divide-y divide-gray-100">
+                @foreach (var order in Model.TodaysOrders)
+                {
+                    var (statusBg, statusText) = order.Status switch {
+                        BusinessObjects.Enums.OrderStatus.Delivered => ("bg-emerald-100 text-emerald-700", "Đã giao"),
+                        BusinessObjects.Enums.OrderStatus.ConfirmedByUser => ("bg-purple-100 text-purple-700", "Đã xác nhận"),
+                        BusinessObjects.Enums.OrderStatus.Completed => ("bg-emerald-100 text-emerald-700", "Hoàn thành"),
+                        BusinessObjects.Enums.OrderStatus.Delivering => ("bg-blue-100 text-blue-700", "Đang giao"),
+                        BusinessObjects.Enums.OrderStatus.Preparing => ("bg-amber-100 text-amber-700", "Đang chuẩn bị"),
+                        BusinessObjects.Enums.OrderStatus.Planned => ("bg-gray-100 text-gray-600", "Đã lên lịch"),
+                        _ => ("bg-amber-100 text-amber-700", "Đang giao")
+                    };
+                    <div class="p-4 hover:bg-gray-50/50 transition" data-order-id="@order.OrderId">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-semibold text-gray-800">Đơn #@order.OrderId — @order.CustomerName</span>
+                            <span class="order-status-badge px-2 py-0.5 rounded-lg text-xs font-medium @statusBg" data-status="@order.Status.ToString()">@statusText</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (var item in order.Items)
+                            {
+                                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-gray-100 text-gray-600" data-order-item-id="@item.OrderItemId">
+                                    @item.MealName @(item.IsDelivered ? "✓" : "")
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Quick Actions -->
+    <div class="glass rounded-2xl p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Thao Tác Nhanh</h3>
+        <div class="flex gap-3">
+            <a href="/Shipper/Delivery" class="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2">
+                <i class="bi bi-list-check"></i>Xem Đơn Hàng
+            </a>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const userId = '@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "")';
+        const orderConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order').withAutomaticReconnect().build();
+        orderConn.on('ReceiveNewAssignment', (orderId) => {
+            if (typeof showToast === 'function') showToast('📦 Bạn có đơn giao hàng mới #' + orderId + '!');
+            setTimeout(() => location.reload(), 1500);
+        });
+        const conn = new signalR.HubConnectionBuilder().withUrl('/hubs/order-tracking').withAutomaticReconnect().build();
+        conn.on('OrderItemStatusChanged', (orderItemId, orderId, status, proofUrl) => {
+            const el = document.querySelector(`[data-order-item-id="${orderItemId}"]`);
+            if (el && !el.textContent.includes('✓')) el.textContent = el.textContent.trim() + ' ✓';
+        });
+        const SHIPPER_STATUS_MAP = {
+            'Delivered': { label: 'Đã giao', cls: 'bg-emerald-100 text-emerald-700' },
+            'ConfirmedByUser': { label: 'Đã xác nhận', cls: 'bg-purple-100 text-purple-700' },
+            'Completed': { label: 'Hoàn thành', cls: 'bg-emerald-100 text-emerald-700' },
+            'Delivering': { label: 'Đang giao', cls: 'bg-blue-100 text-blue-700' },
+            'Preparing': { label: 'Đang chuẩn bị', cls: 'bg-amber-100 text-amber-700' },
+            'Planned': { label: 'Đã lên lịch', cls: 'bg-gray-100 text-gray-600' }
+        };
+        conn.on('OrderStatusChanged', (orderId, status, source) => {
+            const card = document.querySelector(`[data-order-id="${orderId}"]`);
+            if (!card) return;
+            const badge = card.querySelector('.order-status-badge');
+            if (badge) {
+                const s = typeof status === 'string' ? status : String(status || '');
+                const m = SHIPPER_STATUS_MAP[s] || { label: 'Đang giao', cls: 'bg-amber-100 text-amber-700' };
+                badge.textContent = m.label;
+                badge.className = 'order-status-badge px-2 py-0.5 rounded-lg text-xs font-medium ' + m.cls;
+                badge.setAttribute('data-status', s);
+            }
+        });
+        const joinShipperGroups = () => {
+            if (!userId) { console.warn('Shipper userId not found'); return; }
+            orderConn.invoke('JoinShipperGroup', userId).catch(console.warn);
+            conn.invoke('JoinShipperGroup', userId).catch(console.warn);
+        };
+        Promise.all([orderConn.start(), conn.start()])
+            .then(joinShipperGroups)
+            .catch(console.warn);
+        orderConn.onreconnected(joinShipperGroups);
+        conn.onreconnected(joinShipperGroups);
+    </script>
+}

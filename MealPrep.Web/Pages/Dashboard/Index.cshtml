@@ -1,0 +1,176 @@
+@page
+@model MealPrep.Web.Pages.Dashboard.IndexModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Bảng Điều Khiển";
+    var d = Model.Dashboard;
+}
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold">Xin chào, @d.UserFullName! 👋</h1>
+    <p class="text-gray-400 mt-1">@DateTime.Now.ToString("dddd, dd/MM/yyyy", new System.Globalization.CultureInfo("vi-VN"))</p>
+</div>
+
+@if (d.PendingFeedbackCount > 0)
+{
+    <a href="/Feedback" class="block mb-6">
+        <div class="glass rounded-2xl p-4 border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 transition">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 flex-shrink-0">
+                    <i class="bi bi-star-half text-xl"></i>
+                </div>
+                <div class="flex-1">
+                    <p class="font-semibold text-amber-300">Bạn có @d.PendingFeedbackCount món chờ đánh giá</p>
+                    <p class="text-xs text-gray-400">Hãy đánh giá để giúp chúng tôi cải thiện thực đơn cho bạn</p>
+                </div>
+                <i class="bi bi-chevron-right text-amber-400"></i>
+            </div>
+        </div>
+    </a>
+}
+
+<!-- Stats cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Subscription -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Đăng ký</span>
+            <span class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                <i class="bi bi-bookmark-check"></i>
+            </span>
+        </div>
+        @if (d.SubscriptionStatus.HasValue)
+        {
+            <p class="text-lg font-bold">@d.PlanName</p>
+            <p class="text-xs text-emerald-400">@d.SubscriptionStatus</p>
+        }
+        else
+        {
+            <p class="text-lg font-bold text-gray-500">Chưa đăng ký</p>
+            <a href="/Subscription/Plans" class="text-xs text-emerald-400 hover:underline">Đăng ký ngay →</a>
+        }
+    </div>
+
+    <!-- Calories today -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Calo hôm nay</span>
+            <span class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400">
+                <i class="bi bi-fire"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.TodayCalories</p>
+        <p class="text-xs text-gray-500">/ @d.UserCalorieTarget mục tiêu</p>
+    </div>
+
+    <!-- Protein today -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Protein hôm nay</span>
+            <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                <i class="bi bi-egg"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.TodayProtein.ToString("0.0")g</p>
+    </div>
+
+    <!-- Next delivery -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Giao hàng tiếp theo</span>
+            <span class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <i class="bi bi-truck"></i>
+            </span>
+        </div>
+        @if (d.NextDeliveryDate.HasValue)
+        {
+            <p class="text-lg font-bold">@d.NextDeliveryDate.Value.ToString("dd/MM")</p>
+            <p class="text-xs text-gray-500">@d.NextDeliveryDate.Value.ToString("dddd", new System.Globalization.CultureInfo("vi-VN"))</p>
+        }
+        else
+        {
+            <p class="text-lg font-bold text-gray-500">—</p>
+        }
+    </div>
+</div>
+
+<!-- Featured Meals -->
+@if (d.FeaturedMeals.Any())
+{
+    <div class="mb-8">
+        <h2 class="text-lg font-bold mb-4">⭐ Món Ăn Nổi Bật</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (var meal in d.FeaturedMeals.Take(6))
+            {
+                <a href="/Meal/Detail?id=@meal.Id" class="glass rounded-2xl overflow-hidden hover:border-emerald-500/30 transition group">
+                    @if (!string.IsNullOrEmpty(meal.ThumbnailUrl))
+                    {
+                        <div class="h-32 overflow-hidden">
+                            <img src="@meal.ThumbnailUrl" alt="@meal.Name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        </div>
+                    }
+                    else if (meal.Images?.Length > 0)
+                    {
+                        <div class="h-32 overflow-hidden">
+                            <img src="@meal.Images[0]" alt="@meal.Name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="h-32 bg-white/5 flex items-center justify-center text-3xl">🍽️</div>
+                    }
+                    <div class="p-4">
+                        <h3 class="font-bold text-sm group-hover:text-emerald-400 transition truncate">@meal.Name</h3>
+                        <div class="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                            <span>@meal.Calories kcal</span>
+                            @if (meal.AvgRating.HasValue)
+                            {
+                                <span>•</span>
+                                <span class="text-yellow-400"><i class="bi bi-star-fill"></i> @meal.AvgRating.Value.ToString("0.0")</span>
+                            }
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    </div>
+}
+
+<!-- Quick Actions -->
+<div class="glass rounded-2xl p-6">
+    <h2 class="text-lg font-bold mb-4">🚀 Thao Tác Nhanh</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <a href="/Subscription/Plans" class="p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-center transition">
+            <i class="bi bi-bag-check text-2xl text-emerald-400 mb-2 block"></i>
+            <span class="text-xs">Đăng Ký Gói</span>
+        </a>
+        <a href="/Meal" class="p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-center transition">
+            <i class="bi bi-grid text-2xl text-blue-400 mb-2 block"></i>
+            <span class="text-xs">Xem Món Ăn</span>
+        </a>
+        <a href="/Dashboard/Orders" class="p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-center transition">
+            <i class="bi bi-box-seam text-2xl text-amber-400 mb-2 block"></i>
+            <span class="text-xs">Đơn Hàng</span>
+        </a>
+        <a href="/Dashboard/NutritionSummary" class="p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] text-center transition">
+            <i class="bi bi-bar-chart text-2xl text-purple-400 mb-2 block"></i>
+            <span class="text-xs">Dinh Dưỡng</span>
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const userId = '@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "")';
+        const dashConn = new signalR.HubConnectionBuilder()
+            .withUrl('/hubs/dashboard')
+            .withAutomaticReconnect()
+            .build();
+        dashConn.on('DashboardDataChanged', () => setTimeout(() => location.reload(), 2000));
+        dashConn.start()
+            .then(() => userId ? dashConn.invoke('JoinUserDashboard', userId) : Promise.resolve())
+            .catch(console.error);
+    </script>
+}

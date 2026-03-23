@@ -1,0 +1,396 @@
+@page
+@model MealPrep.Web.Pages.Subscription.DetailModel
+@{
+    ViewData["Title"] = "Chi Tiết Đăng Ký";
+    var statusColor = Model.Detail.Status switch
+    {
+        BusinessObjects.Enums.SubscriptionStatus.Active => "emerald",
+        BusinessObjects.Enums.SubscriptionStatus.PendingPayment => "amber",
+        BusinessObjects.Enums.SubscriptionStatus.Cancelled => "red",
+        BusinessObjects.Enums.SubscriptionStatus.Expired => "gray",
+        BusinessObjects.Enums.SubscriptionStatus.Paused => "blue",
+        _ => "blue"
+    };
+    var statusText = Model.Detail.Status switch
+    {
+        BusinessObjects.Enums.SubscriptionStatus.Active => "Đang Hoạt Động",
+        BusinessObjects.Enums.SubscriptionStatus.PendingPayment => "Chờ Thanh Toán",
+        BusinessObjects.Enums.SubscriptionStatus.Cancelled => "Đã Hủy",
+        BusinessObjects.Enums.SubscriptionStatus.Expired => "Hết Hạn",
+        BusinessObjects.Enums.SubscriptionStatus.Paused => "Tạm Ngưng",
+        _ => Model.Detail.Status.ToString()
+    };
+}
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center gap-3">
+        <a href="/Subscription/MySubscriptions" class="p-2 rounded-xl hover:bg-gray-100 transition">
+            <i class="bi bi-arrow-left text-lg"></i>
+        </a>
+        <h1 class="text-2xl font-bold text-gray-900">Chi Tiết Đăng Ký #@Model.Detail.Id</h1>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+    {
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm flex items-center gap-2">
+            <i class="bi bi-check-circle-fill"></i>@Model.SuccessMessage
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-600 text-sm flex items-center gap-2">
+            <i class="bi bi-exclamation-circle-fill"></i>@Model.ErrorMessage
+        </div>
+    }
+
+    <!-- Subscription Info -->
+    <div class="glass rounded-2xl p-6">
+        <div class="flex items-start justify-between mb-6">
+            <div>
+                <h2 class="text-xl font-bold text-gray-900">@Model.Detail.PlanName</h2>
+                @if (!string.IsNullOrEmpty(Model.Detail.PlanDescription))
+                {
+                    <p class="text-sm text-gray-500 mt-1">@Model.Detail.PlanDescription</p>
+                }
+            </div>
+            <span class="px-4 py-1 rounded-full text-sm font-medium bg-@(statusColor)-100 text-@(statusColor)-700 border border-@(statusColor)-200">
+                @statusText
+            </span>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-50 rounded-xl p-4">
+                <p class="text-xs text-gray-400 mb-1">Ngày Bắt Đầu</p>
+                <p class="text-sm font-semibold text-gray-900">@Model.Detail.StartDate.ToString("dd/MM/yyyy")</p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4">
+                <p class="text-xs text-gray-400 mb-1">Ngày Kết Thúc</p>
+                <p class="text-sm font-semibold text-gray-900">@(Model.Detail.EndDate?.ToString("dd/MM/yyyy") ?? "—")</p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4">
+                <p class="text-xs text-gray-400 mb-1">Số Bữa/Ngày</p>
+                <p class="text-sm font-semibold text-gray-900">@Model.Detail.MealsPerDay bữa</p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-4">
+                <p class="text-xs text-gray-400 mb-1">Tổng Tiền</p>
+                <p class="text-sm font-bold text-emerald-600">@Model.Detail.TotalAmount.ToString("N0") ₫</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions for Pending -->
+    @if (Model.Detail.Status == BusinessObjects.Enums.SubscriptionStatus.PendingPayment)
+    {
+        <div class="glass rounded-2xl p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="bi bi-clock text-amber-500 me-2"></i>Gói đang chờ thanh toán
+            </h3>
+            <p class="text-sm text-gray-500 mb-4">Bạn có thể thanh toán lại hoặc hủy gói này.</p>
+            <div class="flex gap-3">
+                <form method="post" asp-page-handler="RetryPayment">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit" class="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-2">
+                        <i class="bi bi-arrow-repeat"></i>Thanh Toán Lại
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="Cancel" onsubmit="return confirm('Bạn có chắc muốn hủy gói này?');">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit" class="px-6 py-2.5 bg-white text-red-600 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-50 transition flex items-center gap-2">
+                        <i class="bi bi-x-circle"></i>Hủy Gói
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+
+    <!-- Actions for Active -->
+    @if (Model.Detail.Status == BusinessObjects.Enums.SubscriptionStatus.Active)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var daysLeft = Model.Detail.EndDate.HasValue ? (Model.Detail.EndDate.Value.DayNumber - today.DayNumber) : (int?)null;
+        var nearExpiry = daysLeft.HasValue && daysLeft <= 7;
+        <div class="glass rounded-2xl p-6 space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <h3 class="text-lg font-semibold text-gray-900">
+                    <i class="bi bi-gear me-2 text-emerald-500"></i>Quản Lý Gói
+                </h3>
+                <a href="/Menu/SelectMeals"
+                   class="inline-flex items-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">
+                    <i class="bi bi-egg-fried"></i>Chọn Món Ăn
+                </a>
+            </div>
+
+            @if (nearExpiry)
+            {
+                <div class="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>Gói sắp hết hạn sau <strong>@daysLeft ngày</strong>. Hãy gia hạn để không bị gián đoạn.</span>
+                </div>
+            }
+
+            <!-- Pause form -->
+            <div class="border border-gray-100 rounded-xl p-4">
+                <p class="text-sm font-semibold text-gray-700 mb-3"><i class="bi bi-pause-circle me-1 text-blue-500"></i>Tạm Ngưng Gói</p>
+                <p class="text-xs text-gray-400 mb-3">Gói sẽ được kéo dài tương ứng số ngày nghỉ. Các đơn hàng trong khoảng thời gian tạm ngưng sẽ bị hủy.</p>
+                <form method="post" asp-page-handler="Pause" class="flex flex-wrap gap-3 items-end">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Từ ngày</label>
+                        <input type="date" name="PauseFrom"
+                               min="@today.ToString("yyyy-MM-dd")"
+                               value="@today.AddDays(1).ToString("yyyy-MM-dd")"
+                               class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Đến ngày</label>
+                        <input type="date" name="PauseTo"
+                               min="@today.AddDays(2).ToString("yyyy-MM-dd")"
+                               value="@today.AddDays(7).ToString("yyyy-MM-dd")"
+                               class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                    </div>
+                    <button type="submit"
+                            class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition">
+                        <i class="bi bi-pause-fill me-1"></i>Tạm Ngưng
+                    </button>
+                </form>
+            </div>
+
+            <!-- Renew + Cancel -->
+            <div class="flex flex-wrap gap-3">
+                <form method="post" asp-page-handler="Renew">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                        <i class="bi bi-arrow-clockwise"></i>Gia Hạn Gói
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="CancelActive"
+                      onsubmit="return confirm('Bạn có chắc muốn hủy gói? Các đơn giao hàng chưa thực hiện sẽ bị hủy.');">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-white text-red-600 border border-red-200 hover:bg-red-50 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                        <i class="bi bi-x-circle"></i>Hủy Gói
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+
+    <!-- Actions for Paused -->
+    @if (Model.Detail.Status == BusinessObjects.Enums.SubscriptionStatus.Paused)
+    {
+        <div class="glass rounded-2xl p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">
+                <i class="bi bi-pause-circle-fill text-blue-500 me-2"></i>Gói Đang Tạm Ngưng
+            </h3>
+            @if (Model.Detail.PauseFrom.HasValue && Model.Detail.PauseTo.HasValue)
+            {
+                <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-sm mb-4">
+                    <i class="bi bi-calendar-range"></i>
+                    <span>Tạm ngưng: <strong>@Model.Detail.PauseFrom.Value.ToString("dd/MM/yyyy")</strong> → <strong>@Model.Detail.PauseTo.Value.ToString("dd/MM/yyyy")</strong></span>
+                </div>
+            }
+            <p class="text-xs text-gray-400 mb-4">Tiếp tục sớm hơn kế hoạch sẽ rút ngắn thời gian gia hạn tương ứng.</p>
+            <div class="flex flex-wrap gap-3">
+                <form method="post" asp-page-handler="Resume">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                        <i class="bi bi-play-fill"></i>Tiếp Tục Ngay
+                    </button>
+                </form>
+                <form method="post" asp-page-handler="CancelActive"
+                      onsubmit="return confirm('Bạn có chắc muốn hủy gói?');">
+                    <input type="hidden" name="id" value="@Model.Detail.Id" />
+                    <button type="submit"
+                            class="px-5 py-2.5 bg-white text-red-600 border border-red-200 hover:bg-red-50 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+                        <i class="bi bi-x-circle"></i>Hủy Gói
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+
+    <!-- Payment History -->
+    @if (Model.Detail.Payments.Any())
+    {
+        <div class="glass rounded-2xl p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="bi bi-credit-card me-2"></i>Lịch Sử Thanh Toán
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-400 border-b border-gray-100">
+                            <th class="pb-3 font-medium">Mã</th>
+                            <th class="pb-3 font-medium">Số tiền</th>
+                            <th class="pb-3 font-medium">Phương thức</th>
+                            <th class="pb-3 font-medium">Trạng thái</th>
+                            <th class="pb-3 font-medium">Ngày tạo</th>
+                            <th class="pb-3 font-medium">Ngày thanh toán</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach (var p in Model.Detail.Payments)
+                        {
+                            var pColor = p.Status switch { "Paid" => "emerald", "Pending" => "amber", "Failed" => "red", _ => "gray" };
+                            var pText = p.Status switch { "Paid" => "Đã Thanh Toán", "Pending" => "Đang Chờ", "Failed" => "Thất Bại", "Cancelled" => "Đã Hủy", _ => p.Status };
+                            <tr>
+                                <td class="py-3 font-mono text-xs">@p.PaymentCode</td>
+                                <td class="py-3 font-semibold">@p.Amount.ToString("N0") ₫</td>
+                                <td class="py-3">@p.Method</td>
+                                <td class="py-3">
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-@(pColor)-100 text-@(pColor)-700">@pText</span>
+                                </td>
+                                <td class="py-3 text-gray-500">@p.CreatedAt.ToString("dd/MM HH:mm")</td>
+                                <td class="py-3 text-gray-500">@(p.PaidAt?.ToString("dd/MM HH:mm") ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <!-- Delivery Orders -->
+    @if (Model.RecentOrders.Any())
+    {
+        <div class="glass rounded-2xl p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="bi bi-truck me-2 text-emerald-600"></i>Đơn Giao Hàng
+            </h3>
+
+            @if (TempData["SuccessMessage"] is string succ)
+            {
+                <div class="mb-3 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2">
+                    <i class="bi bi-check-circle-fill"></i> @succ
+                </div>
+            }
+            @if (TempData["ErrorMessage"] is string errr)
+            {
+                <div class="mb-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+                    <i class="bi bi-exclamation-circle-fill"></i> @errr
+                </div>
+            }
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-400 border-b border-gray-100">
+                            <th class="pb-3 font-medium">Ngày giao</th>
+                            <th class="pb-3 font-medium">Giờ giao</th>
+                            <th class="pb-3 font-medium">Món ăn</th>
+                            <th class="pb-3 font-medium">Trạng thái</th>
+                            <th class="pb-3 font-medium text-right">Xác nhận</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach (var o in Model.RecentOrders)
+                        {
+                            var (badgeClass, badgeLabel) = o.Status switch
+                            {
+                                BusinessObjects.Enums.OrderStatus.Planned         => ("bg-gray-100 text-gray-600", "Đã lên kế hoạch"),
+                                BusinessObjects.Enums.OrderStatus.Preparing       => ("bg-amber-100 text-amber-700", "Đang chuẩn bị"),
+                                BusinessObjects.Enums.OrderStatus.Delivering      => ("bg-blue-100 text-blue-700", "Đang giao"),
+                                BusinessObjects.Enums.OrderStatus.Delivered       => ("bg-emerald-100 text-emerald-700", "Đã giao ✓"),
+                                BusinessObjects.Enums.OrderStatus.ConfirmedByUser => ("bg-purple-100 text-purple-700", "Đã xác nhận ✓"),
+                                BusinessObjects.Enums.OrderStatus.Cancelled       => ("bg-red-100 text-red-600", "Đã hủy"),
+                                _ => ("bg-gray-100 text-gray-500", o.Status.ToString()),
+                            };
+                            <tr data-order-id="@o.OrderId">
+                                <td class="py-3 font-medium text-gray-800">@o.DeliveryDate.ToString("dd/MM/yyyy")</td>
+                                <td class="py-3 text-gray-500 text-xs">@(o.SlotName ?? "—")</td>
+                                <td class="py-3">
+                                    @if (o.MealNames.Any())
+                                    {
+                                        <div class="space-y-0.5">
+                                            @foreach (var m in o.MealNames.Take(2))
+                                            {
+                                                <span class="block text-xs text-gray-600">• @m</span>
+                                            }
+                                            @if (o.MealNames.Count > 2)
+                                            {
+                                                <span class="text-xs text-gray-400">+@(o.MealNames.Count - 2) món</span>
+                                            }
+                                        </div>
+                                    }
+                                    else { <span class="text-gray-300 text-xs">—</span> }
+                                </td>
+                                <td class="py-3">
+                                    <span class="order-status-badge inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold @badgeClass">@badgeLabel</span>
+                                    @if (o.IsAutoFilled)
+                                    {
+                                        <span class="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">AUTO</span>
+                                    }
+                                </td>
+                                <td class="py-3 text-right" id="order-@o.OrderId-actions">
+                                    @if (o.Status == BusinessObjects.Enums.OrderStatus.Delivered)
+                                    {
+                                        <form method="post" asp-page-handler="ConfirmReceipt">
+                                            <input type="hidden" name="id" value="@Model.Detail.Id" />
+                                            <input type="hidden" name="orderId" value="@o.OrderId" />
+                                            <button type="submit"
+                                                    class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition shadow-sm">
+                                                <i class="bi bi-check2-circle me-1"></i>Xác nhận đã nhận
+                                            </button>
+                                        </form>
+                                    }
+                                    else if (o.Status == BusinessObjects.Enums.OrderStatus.ConfirmedByUser)
+                                    {
+                                        <span class="text-xs text-purple-500 font-medium"><i class="bi bi-patch-check-fill me-1"></i>Đã xác nhận</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-xs text-gray-300">—</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        (function() {
+            const SUB_ORDER_STATUS_MAP = {
+                'Planned': { label: 'Đã lên kế hoạch', badge: 'bg-gray-100 text-gray-600' },
+                'Preparing': { label: 'Đang chuẩn bị', badge: 'bg-amber-100 text-amber-700' },
+                'Delivering': { label: 'Đang giao', badge: 'bg-blue-100 text-blue-700' },
+                'Delivered': { label: 'Đã giao ✓', badge: 'bg-emerald-100 text-emerald-700' },
+                'ConfirmedByUser': { label: 'Đã xác nhận ✓', badge: 'bg-purple-100 text-purple-700' },
+                'Cancelled': { label: 'Đã hủy', badge: 'bg-red-100 text-red-600' }
+            };
+            function updateSubOrderStatus(orderId, newStatus) {
+                const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
+                if (!row) return;
+                const badge = row.querySelector('.order-status-badge');
+                if (badge) {
+                    const map = SUB_ORDER_STATUS_MAP[newStatus] || { label: newStatus, badge: 'bg-gray-100 text-gray-500' };
+                    badge.textContent = map.label;
+                    badge.className = 'order-status-badge inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ' + map.badge;
+                }
+                if (newStatus === 'ConfirmedByUser') {
+                    const actions = document.getElementById('order-' + orderId + '-actions');
+                    if (actions) actions.innerHTML = '<span class="text-xs text-purple-500 font-medium"><i class="bi bi-patch-check-fill me-1"></i>Đã xác nhận</span>';
+                }
+            }
+            const userId = '@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "")';
+            const orderConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order').withAutomaticReconnect().build();
+            const trackConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order-tracking').withAutomaticReconnect().build();
+            orderConn.on('ReceiveOrderStatusUpdate', function(orderId, newStatus) {
+                if (typeof orderId === 'number') updateSubOrderStatus(orderId, newStatus);
+            });
+            trackConn.on('OrderStatusChanged', function(orderId, status, source) {
+                if (typeof orderId === 'number') updateSubOrderStatus(orderId, status);
+            });
+            orderConn.start().catch(console.warn);
+            trackConn.start().then(function() { return trackConn.invoke('JoinUserGroup', userId); }).catch(console.warn);
+        })();
+    </script>
+}

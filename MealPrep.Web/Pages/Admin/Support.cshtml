@@ -1,0 +1,203 @@
+@page
+@model MealPrep.Web.Pages.Admin.SupportModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Hỗ Trợ & Tranh Chấp";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">🛡️ Hỗ Trợ & Tranh Chấp</h1>
+    <span id="disputed-count" class="glass px-4 py-2 rounded-xl text-sm">
+        <i class="bi bi-exclamation-triangle me-1 text-amber-400"></i>
+        <span id="disputed-count-num">@Model.DisputedOrders.Count</span> đơn tranh chấp
+    </span>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-check-circle me-1"></i> @Model.SuccessMessage
+    </div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-exclamation-circle me-1"></i> @Model.ErrorMessage
+    </div>
+}
+
+@Html.AntiForgeryToken()
+
+<div id="disputed-empty" class="@(Model.DisputedOrders.Count == 0 ? "" : "hidden")">
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">✅</div>
+        <h3 class="text-xl font-bold mb-2">Không có tranh chấp</h3>
+        <p class="text-gray-400">Tất cả đơn hàng đều ổn.</p>
+    </div>
+</div>
+<div id="disputed-list" class="space-y-4 @(Model.DisputedOrders.Count == 0 ? "hidden" : "")">
+        @foreach (var order in Model.DisputedOrders)
+        {
+            <div class="glass rounded-2xl p-5 disputed-card" data-order-id="@order.OrderId">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="font-bold">Đơn #@order.OrderId</h3>
+                        <p class="text-xs text-gray-500">Ngày giao: @order.DeliveryDate.ToString("dd/MM/yyyy")</p>
+                    </div>
+                    <button onclick="showRescheduleModal(@order.OrderId)"
+                            class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-lg transition">
+                        <i class="bi bi-calendar-plus me-1"></i> Lên lại lịch
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                    <div class="p-3 rounded-xl bg-white/[0.03]">
+                        <p class="text-xs text-gray-500 mb-1">Khách hàng</p>
+                        <p class="text-sm font-medium">@order.CustomerName</p>
+                        <p class="text-xs text-gray-400">@order.CustomerEmail</p>
+                    </div>
+                    <div class="p-3 rounded-xl bg-white/[0.03]">
+                        <p class="text-xs text-gray-500 mb-1">Shipper</p>
+                        <p class="text-sm font-medium">@(order.ShipperName ?? "Chưa phân công")</p>
+                        @if (!string.IsNullOrEmpty(order.ShipperPhone))
+                        {
+                            <p class="text-xs text-gray-400">@order.ShipperPhone</p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Items -->
+                <div class="space-y-2">
+                    @foreach (var item in order.Items)
+                    {
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                            <div>
+                                <p class="text-sm font-medium">@item.MealName</p>
+                                @if (item.DeliveredAt.HasValue)
+                                {
+                                    <p class="text-xs text-gray-500">Giao lúc: @item.DeliveredAt.Value.ToString("HH:mm dd/MM")</p>
+                                }
+                                else
+                                {
+                                    <p class="text-xs text-red-400">Chưa giao</p>
+                                }
+                            </div>
+                            @if (item.ProofImageUrls?.Length > 0)
+                            {
+                                <div class="flex gap-1">
+                                    @foreach (var img in item.ProofImageUrls)
+                                    {
+                                        <img src="@img" alt="Proof" onclick="showLightbox('@img')"
+                                             class="w-10 h-10 rounded object-cover border border-white/10 cursor-pointer hover:opacity-80 transition" />
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+</div>
+
+<!-- Reschedule Modal -->
+<div id="rescheduleModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4" onclick="hideRescheduleModal()">
+    <div class="glass rounded-2xl p-6 max-w-sm w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-4"><i class="bi bi-calendar-plus me-2 text-amber-400"></i>Lên Lại Lịch Giao</h3>
+        <input type="hidden" id="rescheduleOrderId" />
+        <div class="mb-4">
+            <label class="block text-xs text-gray-500 mb-1">Ngày giao mới</label>
+            <input type="date" id="rescheduleDate"
+                   class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-amber-500 focus:outline-none" />
+        </div>
+        <div class="flex gap-2 justify-end">
+            <button onclick="hideRescheduleModal()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition">Hủy</button>
+            <button onclick="reschedule()" id="rescheduleBtn"
+                    class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm transition">
+                Xác nhận
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+    <img id="lightboxImg" class="max-w-full max-h-full rounded-xl" />
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        (function initSupportRealtime() {
+            const trackConn = window.adminTrackConn;
+            if (!trackConn) return;
+            trackConn.on('OrderStatusChanged', async (orderId, status) => {
+                if (status !== 'Disputed' || !orderId) return;
+                if (document.querySelector(`.disputed-card[data-order-id="${orderId}"]`)) return; // already shown
+                try {
+                    const res = await fetch(`?handler=GetDisputedOrder&orderId=${orderId}`);
+                    const data = await res.json();
+                    if (!data.found || !data.order) return;
+                    const o = data.order;
+                    const itemsHtml = (o.items || []).map(item => {
+                        const deliveredAt = item.deliveredAt ? new Date(item.deliveredAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(item.deliveredAt).toLocaleDateString('vi-VN') : '';
+                        const proofImgs = (item.proofImageUrls || []).map(url => `<img src="${url.replace(/"/g, '&quot;')}" alt="Proof" onclick="showLightbox('${url.replace(/'/g, "\\'")}')" class="w-10 h-10 rounded object-cover border border-white/10 cursor-pointer hover:opacity-80 transition" />`).join('');
+                        return `<div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5"><div><p class="text-sm font-medium">${(item.mealName || '').replace(/</g, '&lt;')}</p><p class="text-xs ${item.deliveredAt ? 'text-gray-500' : 'text-red-400'}">${item.deliveredAt ? 'Giao lúc: ' + deliveredAt : 'Chưa giao'}</p></div>${proofImgs ? `<div class="flex gap-1">${proofImgs}</div>` : ''}</div>`;
+                    }).join('');
+                    const cardHtml = `<div class="glass rounded-2xl p-5 disputed-card" data-order-id="${o.orderId}"><div class="flex items-center justify-between mb-4"><div><h3 class="font-bold">Đơn #${o.orderId}</h3><p class="text-xs text-gray-500">Ngày giao: ${new Date(o.deliveryDate + 'T00:00:00').toLocaleDateString('vi-VN')}</p></div><button onclick="showRescheduleModal(${o.orderId})" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-lg transition"><i class="bi bi-calendar-plus me-1"></i> Lên lại lịch</button></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4"><div class="p-3 rounded-xl bg-white/[0.03]"><p class="text-xs text-gray-500 mb-1">Khách hàng</p><p class="text-sm font-medium">${(o.customerName || '').replace(/</g, '&lt;')}</p><p class="text-xs text-gray-400">${(o.customerEmail || '').replace(/</g, '&lt;')}</p></div><div class="p-3 rounded-xl bg-white/[0.03]"><p class="text-xs text-gray-500 mb-1">Shipper</p><p class="text-sm font-medium">${(o.shipperName || 'Chưa phân công').replace(/</g, '&lt;')}</p>${o.shipperPhone ? `<p class="text-xs text-gray-400">${(o.shipperPhone || '').replace(/</g, '&lt;')}</p>` : ''}</div></div><div class="space-y-2">${itemsHtml}</div></div>`;
+                    document.getElementById('disputed-empty').classList.add('hidden');
+                    document.getElementById('disputed-list').classList.remove('hidden');
+                    document.getElementById('disputed-list').insertAdjacentHTML('afterbegin', cardHtml);
+                    const countEl = document.getElementById('disputed-count-num');
+                    if (countEl) countEl.textContent = parseInt(countEl.textContent || '0', 10) + 1;
+                    if (typeof showToast === 'function') showToast('🛡️ Đơn #' + orderId + ' vừa báo chưa nhận được hàng');
+                } catch (e) { console.warn('Support realtime:', e); }
+            });
+        })();
+
+        function showRescheduleModal(orderId) {
+            document.getElementById('rescheduleOrderId').value = orderId;
+            document.getElementById('rescheduleDate').value = '';
+            document.getElementById('rescheduleModal').classList.remove('hidden');
+        }
+
+        function hideRescheduleModal() {
+            document.getElementById('rescheduleModal').classList.add('hidden');
+        }
+
+        async function reschedule() {
+            const orderId = document.getElementById('rescheduleOrderId').value;
+            const newDate = document.getElementById('rescheduleDate').value;
+            if (!newDate) { alert('Vui lòng chọn ngày.'); return; }
+
+            const btn = document.getElementById('rescheduleBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>';
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+
+            try {
+                const res = await fetch(`?handler=Reschedule&orderId=${orderId}&newDate=${newDate}`, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': token }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.error || 'Có lỗi xảy ra.');
+                }
+            } catch {
+                alert('Lỗi kết nối.');
+            }
+            btn.disabled = false;
+            btn.textContent = 'Xác nhận';
+        }
+
+        function showLightbox(src) {
+            event.stopPropagation();
+            document.getElementById('lightboxImg').src = src;
+            document.getElementById('lightbox').classList.remove('hidden');
+        }
+    </script>
+}

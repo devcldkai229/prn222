@@ -1,0 +1,363 @@
+@page
+@model MealPrep.Web.Pages.Dashboard.OrderDetailModel
+@using BusinessObjects.Enums
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Chi tiết đơn #" + Model.Order?.OrderId;
+}
+
+@if (Model.Order == null)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <p class="text-gray-400">Không tìm thấy đơn hàng.</p>
+        <a href="/Dashboard/Orders" class="inline-block mt-4 text-emerald-500 hover:text-emerald-600">← Quay lại</a>
+    </div>
+}
+else
+{
+    var o = Model.Order;
+    var statusBadge = o.Status switch {
+        OrderStatus.Planned => "bg-gray-500/10 text-gray-400",
+        OrderStatus.InProgress => "bg-yellow-500/10 text-yellow-400",
+        OrderStatus.Delivered => "bg-emerald-500/10 text-emerald-400",
+        OrderStatus.ConfirmedByUser => "bg-purple-500/10 text-purple-400",
+        OrderStatus.Disputed => "bg-orange-500/10 text-orange-400",
+        OrderStatus.Cancelled => "bg-red-500/10 text-red-400",
+        _ => "bg-gray-500/10 text-gray-400"
+    };
+    var statusLabel = o.Status switch {
+        OrderStatus.Planned => "Đã lên lịch",
+        OrderStatus.InProgress => "Đang xử lý",
+        OrderStatus.Delivered => "Đã giao",
+        OrderStatus.ConfirmedByUser => "Đã xác nhận",
+        OrderStatus.Disputed => "Tranh chấp",
+        OrderStatus.Cancelled => "Đã hủy",
+        _ => o.Status.ToString()
+    };
+
+    <div class="space-y-6">
+        <a href="/Dashboard/Orders" class="text-emerald-500 hover:text-emerald-600 text-sm"><i class="bi bi-arrow-left me-1"></i>Quay lại</a>
+        <div class="glass rounded-2xl p-6" id="order-@o.OrderId" data-order-id="@o.OrderId">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold">Đơn #@o.OrderId</h2>
+                <span class="order-status-badge px-3 py-1 rounded-lg text-xs font-medium @statusBadge">@statusLabel</span>
+            </div>
+            <p class="text-sm text-gray-500 mb-4">
+                <i class="bi bi-calendar me-1"></i> @o.DeliveryDate.ToString("dd/MM/yyyy")
+                <span class="mx-1">•</span>
+                <i class="bi bi-clock me-1"></i> @o.SlotName
+            </p>
+            @if (!string.IsNullOrEmpty(o.ShipperName))
+            {
+                <div class="mb-4 p-3 rounded-xl bg-white/[0.05] border border-white/10">
+                    <h4 class="text-xs font-semibold text-gray-400 mb-2"><i class="bi bi-truck me-1"></i> Shipper giao hàng</h4>
+                    <p class="text-sm font-medium">@o.ShipperName</p>
+                    @if (!string.IsNullOrEmpty(o.ShipperPhone))
+                    {
+                        <a href="tel:@o.ShipperPhone" class="text-sm text-emerald-400 hover:text-emerald-300"><i class="bi bi-telephone me-1"></i> @o.ShipperPhone</a>
+                    }
+                </div>
+            }
+            <h3 class="font-semibold mb-3">Chi tiết món</h3>
+            <div class="space-y-2">
+                @foreach (var item in o.Items)
+                {
+                    <div class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.03]" data-order-item-id="@item.OrderItemId" data-meal-id="@item.MealId" data-delivery-date="@item.DeliveryDate.ToString("yyyy-MM-dd")" data-has-rated="@(item.HasRated ? "true" : "false")" id="item-@item.OrderItemId">
+                        @if (item.MealImages?.Length > 0)
+                        {
+                            <img src="@item.MealImages[0]" alt="" class="w-12 h-12 rounded-lg object-cover" />
+                        }
+                        else
+                        {
+                            <div class="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center text-xl">🍽️</div>
+                        }
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-400">@item.DeliverySlotName</span>
+                                <span class="item-status-text text-xs text-gray-500">@item.Status</span>
+                            </div>
+                            <p class="font-medium">@item.MealName</p>
+                            @if (item.IsDelivered)
+                            {
+                                <p class="text-xs text-emerald-400"><i class="bi bi-check-circle-fill me-1"></i>Đã giao</p>
+                                @if (item.ProofImageUrls?.Length > 0)
+                                {
+                                    <div class="flex gap-1 mt-1 item-proofs">
+                                        @foreach (var url in item.ProofImageUrls)
+                                        {
+                                            <img src="@url" alt="Proof" class="w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80" onclick="showLightbox(this.src)" />
+                                        }
+                                    </div>
+                                }
+                            }
+                            @if (o.Status == OrderStatus.ConfirmedByUser && !item.HasRated)
+                            {
+                                <button type="button" onclick="openRatingModal(@item.OrderItemId, @item.MealId, '@item.MealName.Replace("'", "\\'")', '@item.DeliveryDate.ToString("yyyy-MM-dd")')"
+                                        class="item-rate-btn mt-2 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded-lg transition">
+                                    <i class="bi bi-star me-1"></i> Đánh giá món
+                                </button>
+                            }
+                            else if (o.Status == OrderStatus.ConfirmedByUser && item.HasRated)
+                            {
+                                <p class="text-xs text-purple-400 mt-1"><i class="bi bi-patch-check-fill me-1"></i>Đã đánh giá</p>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+            @if (o.Status == OrderStatus.Delivered)
+            {
+                <div class="flex gap-2 mt-4 pt-4 border-t border-white/10" id="order-@o.OrderId-actions">
+                    <button onclick="confirmReceipt(@o.OrderId)" class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-xl" id="confirm-@o.OrderId">
+                        <i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng
+                    </button>
+                    <button onclick="showReportModal(@o.OrderId)" class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-xl">
+                        <i class="bi bi-exclamation-triangle me-1"></i> Chưa nhận được hàng
+                    </button>
+                </div>
+            }
+            else if (o.Status == OrderStatus.Disputed)
+            {
+                <div class="mt-4 pt-4 border-t border-white/10" id="order-@o.OrderId-actions">
+                    <p class="text-amber-400 text-sm"><i class="bi bi-exclamation-triangle me-1"></i> Đơn đang tranh chấp. Admin sẽ xử lý sớm.</p>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<div id="reportModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4" onclick="hideReportModal()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2 text-red-400"><i class="bi bi-exclamation-triangle me-2"></i>Chưa nhận được hàng</h3>
+        <input type="hidden" id="reportOrderId" />
+        <textarea id="reportNote" rows="3" placeholder="Mô tả vấn đề..." class="w-full px-4 py-3 bg-white/5 border rounded-xl text-sm mb-4"></textarea>
+        <div class="flex gap-2 justify-end">
+            <button onclick="hideReportModal()" class="px-4 py-2 rounded-xl text-sm">Hủy</button>
+            <button onclick="reportMissing()" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm">Gửi báo cáo</button>
+        </div>
+    </div>
+</div>
+<div id="lightbox" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+    <img id="lightboxImg" class="max-w-full max-h-full rounded-xl" />
+</div>
+
+<div id="ratingModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4" onclick="closeRatingModal()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2 text-amber-400"><i class="bi bi-star me-2"></i>Đánh giá món</h3>
+        <p id="ratingMealName" class="text-sm text-gray-400 mb-4"></p>
+        <input type="hidden" id="ratingOrderItemId" />
+        <input type="hidden" id="ratingMealId" />
+        <input type="hidden" id="ratingDeliveryDate" />
+        <div class="flex gap-1 mb-3 star-group">
+            @for (int i = 1; i <= 5; i++)
+            {
+                <button type="button" class="star-btn text-2xl text-gray-600 hover:text-yellow-400 transition" data-star="@i">☆</button>
+            }
+            <span class="ml-2 text-sm text-gray-500 star-label align-middle"></span>
+        </div>
+        <textarea id="ratingComment" rows="2" placeholder="Nhận xét (tùy chọn)..." class="w-full px-3 py-2 bg-white/5 border rounded-xl text-sm mb-4"></textarea>
+        <div class="flex gap-2 justify-end">
+            <button type="button" onclick="closeRatingModal()" class="px-4 py-2 rounded-xl text-sm">Hủy</button>
+            <button type="button" id="ratingSubmitBtn" onclick="submitRatingFromModal()" disabled class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm disabled:opacity-50">
+                <i class="bi bi-send me-1"></i> Gửi đánh giá
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @Html.AntiForgeryToken()
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+        async function confirmReceipt(id) {
+            const btn = document.getElementById('confirm-' + id);
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>'; }
+            try {
+                const r = await fetch('/Dashboard/Orders?handler=ConfirmReceipt&orderId=' + id, { method: 'POST', headers: { 'RequestVerificationToken': token } });
+                const d = await r.json();
+                if (d.success) {
+                    showToast(d.message);
+                    updateDetailStatus(id, 'ConfirmedByUser');
+                } else {
+                    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng'; }
+                    showToast(d.message || 'Lỗi', 'error');
+                }
+            } catch {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng'; }
+                showToast('Lỗi', 'error');
+            }
+        }
+        const STATUS_LABELS = { Planned: 'Planned', Preparing: 'Preparing', Delivering: 'Delivering', Delivered: 'Delivered', Cancelled: 'Cancelled', ConfirmedByUser: 'Đã xác nhận', Disputed: 'Tranh chấp' };
+        function updateDetailStatus(orderId, newStatus) {
+            const card = document.querySelector('[data-order-id="' + orderId + '"]');
+            if (!card) return;
+            const badge = card.querySelector('.order-status-badge');
+            let actions = document.getElementById('order-' + orderId + '-actions');
+            const map = { ConfirmedByUser: { label: 'Đã xác nhận', badge: 'bg-purple-500/10 text-purple-400' }, Disputed: { label: 'Tranh chấp', badge: 'bg-orange-500/10 text-orange-400' }, Delivered: { label: 'Đã giao', badge: 'bg-emerald-500/10 text-emerald-400' }, Preparing: { label: 'Đang chuẩn bị', badge: 'bg-amber-500/10 text-amber-400' }, Delivering: { label: 'Đang giao', badge: 'bg-blue-500/10 text-blue-400' } };
+            if (badge && (map[newStatus] || STATUS_LABELS[newStatus])) {
+                badge.textContent = map[newStatus]?.label ?? newStatus;
+                badge.className = 'order-status-badge px-3 py-1 rounded-lg text-xs font-medium ' + (map[newStatus]?.badge ?? 'bg-gray-500/10 text-gray-400');
+            }
+            const deliveredActionsHtml = '<div class="flex gap-2 mt-4 pt-4 border-t border-white/10" id="order-' + orderId + '-actions"><button onclick="confirmReceipt(' + orderId + ')" class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-xl" id="confirm-' + orderId + '"><i class="bi bi-check2-circle me-1"></i> Xác nhận đã nhận hàng</button><button onclick="showReportModal(' + orderId + ')" class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm rounded-xl"><i class="bi bi-exclamation-triangle me-1"></i> Chưa nhận được hàng</button></div>';
+            if (newStatus === 'Delivered') {
+                if (actions) {
+                    actions.outerHTML = deliveredActionsHtml;
+                } else {
+                    const div = document.createElement('div');
+                    div.innerHTML = deliveredActionsHtml;
+                    card.appendChild(div.firstElementChild);
+                }
+            } else if (newStatus === 'Disputed') {
+                const disputedHtml = '<div class="mt-4 pt-4 border-t border-white/10" id="order-' + orderId + '-actions"><p class="text-amber-400 text-sm"><i class="bi bi-exclamation-triangle me-1"></i> Đơn đang tranh chấp. Admin sẽ xử lý sớm.</p></div>';
+                if (actions) actions.outerHTML = disputedHtml;
+                else { const div = document.createElement('div'); div.innerHTML = disputedHtml; card.appendChild(div.firstElementChild); }
+            } else if (actions) {
+                if (newStatus === 'ConfirmedByUser') actions.outerHTML = '<span class="text-xs text-purple-500 font-medium"><i class="bi bi-patch-check-fill me-1"></i>Đã xác nhận</span>';
+            }
+            if (newStatus === 'ConfirmedByUser') addRatingButtonsToItems(orderId);
+        }
+        function addRatingButtonsToItems(orderId) {
+            const card = document.querySelector('[data-order-id="' + orderId + '"]');
+            if (!card) return;
+            card.querySelectorAll('[data-order-item-id][data-has-rated="false"]').forEach(itemEl => {
+                if (itemEl.querySelector('.item-rate-btn')) return;
+                const orderItemId = itemEl.dataset.orderItemId;
+                const mealId = itemEl.dataset.mealId;
+                const mealName = itemEl.querySelector('.font-medium')?.textContent || '';
+                const deliveryDate = itemEl.dataset.deliveryDate || '';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'item-rate-btn mt-2 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs rounded-lg transition';
+                btn.innerHTML = '<i class="bi bi-star me-1"></i> Đánh giá món';
+                btn.onclick = () => openRatingModal(parseInt(orderItemId, 10), parseInt(mealId, 10), mealName, deliveryDate);
+                const flex1 = itemEl.querySelector('.flex-1');
+                if (flex1) flex1.appendChild(btn);
+            });
+        }
+        let _modalRatingStars = 0;
+        function openRatingModal(orderItemId, mealId, mealName, deliveryDate) {
+            document.getElementById('ratingOrderItemId').value = orderItemId;
+            document.getElementById('ratingMealId').value = mealId;
+            document.getElementById('ratingDeliveryDate').value = deliveryDate;
+            document.getElementById('ratingMealName').textContent = mealName;
+            document.getElementById('ratingComment').value = '';
+            _modalRatingStars = 0;
+            document.querySelectorAll('#ratingModal .star-btn').forEach((b, i) => {
+                b.textContent = '☆';
+                b.classList.remove('text-yellow-400');
+                b.classList.add('text-gray-600');
+                b.onclick = () => {
+                    _modalRatingStars = i + 1;
+                    document.querySelectorAll('#ratingModal .star-btn').forEach((x, j) => {
+                        x.textContent = j < _modalRatingStars ? '★' : '☆';
+                        x.classList.toggle('text-yellow-400', j < _modalRatingStars);
+                        x.classList.toggle('text-gray-600', j >= _modalRatingStars);
+                    });
+                    document.getElementById('ratingSubmitBtn').disabled = false;
+                };
+            });
+            document.getElementById('ratingSubmitBtn').disabled = true;
+            document.getElementById('ratingSubmitBtn').innerHTML = '<i class="bi bi-send me-1"></i> Gửi đánh giá';
+            document.getElementById('ratingModal').classList.remove('hidden');
+        }
+        function closeRatingModal() { document.getElementById('ratingModal').classList.add('hidden'); }
+        async function submitRatingFromModal() {
+            const orderItemId = parseInt(document.getElementById('ratingOrderItemId').value, 10);
+            const mealId = parseInt(document.getElementById('ratingMealId').value, 10);
+            const deliveryDate = document.getElementById('ratingDeliveryDate').value;
+            const stars = _modalRatingStars;
+            if (!stars) return;
+            const comments = document.getElementById('ratingComment').value || '';
+            const btn = document.getElementById('ratingSubmitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>';
+            try {
+                const r = await fetch('/Feedback?handler=SubmitRating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': token },
+                    body: JSON.stringify({ orderItemId, mealId, stars, tags: [], comments, deliveryDate })
+                });
+                const d = await r.json();
+                if (d.success) {
+                    showToast(d.message);
+                    closeRatingModal();
+                    markItemRated(orderItemId);
+                } else {
+                    showToast(d.message || d.error || 'Lỗi', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-send me-1"></i> Gửi đánh giá';
+                }
+            } catch {
+                showToast('Lỗi kết nối', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send me-1"></i> Gửi đánh giá';
+            }
+        }
+        function markItemRated(orderItemId) {
+            const itemEl = document.getElementById('item-' + orderItemId);
+            if (!itemEl) return;
+            itemEl.dataset.hasRated = 'true';
+            const rateBtn = itemEl.querySelector('.item-rate-btn');
+            if (rateBtn) {
+                const p = document.createElement('p');
+                p.className = 'text-xs text-purple-400 mt-1';
+                p.innerHTML = '<i class="bi bi-patch-check-fill me-1"></i>Đã đánh giá';
+                rateBtn.replaceWith(p);
+            }
+        }
+        function updateItemStatus(orderItemId, orderId, status, proofUrl) {
+            const itemEl = document.getElementById('item-' + orderItemId);
+            if (!itemEl || orderId !== _orderId) return;
+            const statusSpan = itemEl.querySelector('.item-status-text');
+            if (statusSpan) statusSpan.textContent = status || '';
+            if (status === 'Delivered' && proofUrl) {
+                const existing = itemEl.querySelector('.text-xs.text-emerald-400');
+                if (!existing) {
+                    const flex1 = itemEl.querySelector('.flex-1');
+                    const p = document.createElement('p');
+                    p.className = 'text-xs text-emerald-400';
+                    p.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Đã giao';
+                    flex1.appendChild(p);
+                }
+                const proofDiv = itemEl.querySelector('.item-proofs') || (function(){ const d = document.createElement('div'); d.className = 'flex gap-1 mt-1 item-proofs'; itemEl.querySelector('.flex-1').appendChild(d); return d; })();
+                const img = document.createElement('img');
+                img.src = proofUrl;
+                img.alt = 'Proof';
+                img.className = 'w-10 h-10 rounded object-cover cursor-pointer hover:opacity-80';
+                img.onclick = () => showLightbox(proofUrl);
+                proofDiv.appendChild(img);
+            }
+        }
+        function showReportModal(id) {
+            document.getElementById('reportOrderId').value = id;
+            document.getElementById('reportNote').value = '';
+            document.getElementById('reportModal').classList.remove('hidden');
+        }
+        function hideReportModal() { document.getElementById('reportModal').classList.add('hidden'); }
+        async function reportMissing() {
+            const orderId = document.getElementById('reportOrderId').value;
+            const note = document.getElementById('reportNote').value;
+            try {
+                const r = await fetch('/Dashboard/Orders?handler=ReportMissing&orderId=' + orderId + '&note=' + encodeURIComponent(note), { method: 'POST', headers: { 'RequestVerificationToken': token } });
+                const d = await r.json();
+                if (d.success) {
+                    showToast(d.message);
+                    hideReportModal();
+                    updateDetailStatus(parseInt(orderId, 10), 'Disputed');
+                }
+            } catch { showToast('Lỗi', 'error'); }
+        }
+        function showLightbox(src) { event?.stopPropagation(); document.getElementById('lightboxImg').src = src; document.getElementById('lightbox').classList.remove('hidden'); }
+
+        const _orderId = @(Model.Order?.OrderId ?? 0);
+        const _userId = '@(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "")';
+        if (_orderId > 0 && _userId) {
+            const trackConn = new signalR.HubConnectionBuilder().withUrl('/hubs/order-tracking').withAutomaticReconnect().build();
+            trackConn.on('OrderStatusChanged', (oid, status) => { if (oid === _orderId) updateDetailStatus(oid, status); });
+            trackConn.on('OrderItemStatusChanged', (orderItemId, oid, status, proofUrl) => { updateItemStatus(orderItemId, oid, status, proofUrl); });
+            trackConn.on('OrderItemRated', (orderItemId) => { if (orderItemId) markItemRated(orderItemId); });
+            trackConn.start().then(() => trackConn.invoke('JoinUserGroup', _userId)).catch(console.error);
+        }
+    </script>
+}

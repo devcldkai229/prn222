@@ -1,0 +1,271 @@
+@page
+@model MealPrep.Web.Pages.Admin.IndexModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Admin Dashboard";
+    var d = Model.Dashboard;
+    var revChange = d.YesterdaysRevenue > 0
+        ? ((d.TodaysRevenue - d.YesterdaysRevenue) / d.YesterdaysRevenue * 100)
+        : 0m;
+}
+
+<h1 class="text-2xl font-bold mb-6">📊 Tổng Quan</h1>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Today Revenue -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Doanh thu hôm nay</span>
+            <span class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                <i class="bi bi-cash-stack"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.TodaysRevenue.ToString("N0")₫</p>
+        @if (revChange != 0)
+        {
+            <p class="text-xs mt-1 @(revChange >= 0 ? "text-emerald-400" : "text-red-400")">
+                <i class="bi bi-arrow-@(revChange >= 0 ? "up" : "down")"></i>
+                @Math.Abs(revChange).ToString("0.0")% so với hôm qua
+            </p>
+        }
+    </div>
+
+    <!-- Active Subscribers -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Đăng ký hoạt động</span>
+            <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                <i class="bi bi-people-fill"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.ActiveSubscriberCount</p>
+    </div>
+
+    <!-- Tomorrow Orders -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Đơn hàng ngày mai</span>
+            <span class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                <i class="bi bi-box-seam-fill"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.TomorrowOrderCount</p>
+    </div>
+
+    <!-- Kitchen Prep -->
+    <div class="glass rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-gray-400 text-sm">Phần ăn cần chuẩn bị</span>
+            <span class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <i class="bi bi-fire"></i>
+            </span>
+        </div>
+        <p class="text-2xl font-bold">@d.KitchenPrepMealCount</p>
+    </div>
+</div>
+
+<!-- Charts row -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Revenue Chart -->
+    <div class="glass rounded-2xl p-6">
+        <h3 class="font-bold mb-4">Doanh Thu 30 Ngày</h3>
+        <canvas id="revenueChart" height="200"></canvas>
+    </div>
+    <!-- Order Status -->
+    <div class="glass rounded-2xl p-6">
+        <h3 class="font-bold mb-4">Phân Bố Trạng Thái Đơn Hàng</h3>
+        <canvas id="orderStatusChart" height="200"></canvas>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- User Goals -->
+    <div class="glass rounded-2xl p-6">
+        <h3 class="font-bold mb-4">Mục Tiêu Người Dùng</h3>
+        <canvas id="goalChart" height="200"></canvas>
+    </div>
+
+    <!-- Top Disliked Meals -->
+    <div class="glass rounded-2xl p-6">
+        <h3 class="font-bold mb-4">Món Ăn Bị Ghét Nhiều Nhất</h3>
+        @if (d.TopDislikedMeals.Any())
+        {
+            <div class="space-y-3">
+                @foreach (var meal in d.TopDislikedMeals)
+                {
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03]">
+                        <span class="text-sm">@meal.Name</span>
+                        <span class="text-xs text-red-400 font-semibold">@meal.DislikedCount lượt</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="text-gray-500 text-sm">Chưa có dữ liệu.</p>
+        }
+    </div>
+</div>
+
+<!-- Recent Failed Payments -->
+<div class="glass rounded-2xl p-6 mb-8">
+    <h3 class="font-bold mb-4">Biểu Đồ Đăng Ký Mới & Gói Dịch Vụ</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+            <p class="text-sm text-gray-400 mb-3">Đăng Ký Mới 7 Ngày Gần Đây</p>
+            <canvas id="newSubsChart" height="200"></canvas>
+        </div>
+        <div>
+            <p class="text-sm text-gray-400 mb-3">Phân Bố Gói Dịch Vụ (Đang Hoạt Động)</p>
+            <canvas id="planDistChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Failed Payments -->
+<div class="glass rounded-2xl p-6">
+    <h3 class="font-bold mb-4">Thanh Toán Thất Bại Gần Đây</h3>
+    @if (d.RecentFailedPayments.Any())
+    {
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-gray-500 text-xs uppercase border-b border-white/10">
+                        <th class="text-left py-3 px-2">ID</th>
+                        <th class="text-left py-3 px-2">Khách Hàng</th>
+                        <th class="text-right py-3 px-2">Số Tiền</th>
+                        <th class="text-left py-3 px-2">Phương Thức</th>
+                        <th class="text-left py-3 px-2">Thời Gian</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var pay in d.RecentFailedPayments)
+                    {
+                        <tr class="border-b border-white/5 hover:bg-white/[0.02]">
+                            <td class="py-3 px-2 text-gray-400">#@pay.PaymentId</td>
+                            <td class="py-3 px-2">@pay.CustomerName</td>
+                            <td class="py-3 px-2 text-right text-red-400">@pay.Amount.ToString("N0")₫</td>
+                            <td class="py-3 px-2 text-gray-400">@pay.Method</td>
+                            <td class="py-3 px-2 text-gray-500">@pay.CreatedAt.ToString("dd/MM HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="text-gray-500 text-sm">Không có thanh toán thất bại.</p>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // Revenue chart
+        new Chart(document.getElementById('revenueChart'), {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(r => r.Label))),
+                datasets: [{
+                    label: 'Doanh thu',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(r => r.Amount))),
+                    borderColor: '#34d399',
+                    backgroundColor: 'rgba(52,211,153,0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+
+        // Order Status Doughnut
+        const statusColors = ['#60a5fa', '#fbbf24', '#34d399', '#818cf8', '#f87171', '#fb923c'];
+        new Chart(document.getElementById('orderStatusChart'), {
+            type: 'doughnut',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(s => s.Status))),
+                datasets: [{
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(s => s.Count))),
+                    backgroundColor: statusColors.slice(0, @d.OrderStatusDistribution.Count),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '60%',
+                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
+            }
+        });
+
+        // Goal segments
+        const goalColors = ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa'];
+        new Chart(document.getElementById('goalChart'), {
+            type: 'doughnut',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.UserGoalSegments.Select(g => g.Goal))),
+                datasets: [{
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.UserGoalSegments.Select(g => g.Count))),
+                    backgroundColor: goalColors.slice(0, @d.UserGoalSegments.Count),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '60%',
+                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
+            }
+        });
+
+        // New Subscriptions (last 7 days) - bar chart
+        new Chart(document.getElementById('newSubsChart'), {
+            type: 'bar',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Label))),
+                datasets: [{
+                    label: 'Đăng ký mới',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Count))),
+                    backgroundColor: 'rgba(52,211,153,0.7)',
+                    borderColor: '#34d399',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#6b7280', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                }
+            }
+        });
+
+        // Subscription Plan Distribution - doughnut
+        const planColors = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#60a5fa'];
+        new Chart(document.getElementById('planDistChart'), {
+            type: 'doughnut',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.PlanName))),
+                datasets: [{
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.Count))),
+                    backgroundColor: planColors.slice(0, @d.SubscriptionPlanDistribution.Count),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                cutout: '60%',
+                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
+            }
+        });
+    </script>
+}

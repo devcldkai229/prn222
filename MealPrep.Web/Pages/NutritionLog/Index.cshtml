@@ -1,0 +1,100 @@
+@page
+@model MealPrep.Web.Pages.NutritionLog.IndexModel
+@{
+    ViewData["Title"] = "Nhật Ký Dinh Dưỡng";
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">Nhật Ký Dinh Dưỡng</h1>
+        <a href="/NutritionLog/Create" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition flex items-center gap-1">
+            <i class="bi bi-plus-lg"></i>Thêm Mới
+        </a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+    {
+        <div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-emerald-700 text-sm flex items-center gap-2">
+            <i class="bi bi-check-circle-fill"></i>@Model.SuccessMessage
+        </div>
+    }
+
+    <!-- Date Picker -->
+    <div class="glass rounded-2xl p-4 flex items-center gap-3">
+        <form method="get" class="flex items-center gap-3">
+            <label class="text-sm text-gray-600">Ngày:</label>
+            <input type="date" name="date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")"
+                   class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+            <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition">Xem</button>
+        </form>
+        <div class="flex gap-2 ml-auto">
+            <a href="/NutritionLog?date=@Model.SelectedDate.AddDays(-1).ToString("yyyy-MM-dd")" class="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <a href="/NutritionLog?date=@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")" class="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition">Hôm nay</a>
+            <a href="/NutritionLog?date=@Model.SelectedDate.AddDays(1).ToString("yyyy-MM-dd")" class="px-3 py-1.5 bg-gray-100 rounded-lg text-sm text-gray-600 hover:bg-gray-200 transition">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- Daily Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-2xl font-bold text-amber-500">@Model.TotalCalories.ToString("N0")</p>
+            <p class="text-xs text-gray-400 mt-1">Calo</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-2xl font-bold text-blue-500">@Model.TotalProtein.ToString("N1")g</p>
+            <p class="text-xs text-gray-400 mt-1">Protein</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-2xl font-bold text-emerald-500">@Model.TotalCarbs.ToString("N1")g</p>
+            <p class="text-xs text-gray-400 mt-1">Carbs</p>
+        </div>
+        <div class="glass rounded-2xl p-5 text-center">
+            <p class="text-2xl font-bold text-purple-500">@Model.TotalFat.ToString("N1")g</p>
+            <p class="text-xs text-gray-400 mt-1">Fat</p>
+        </div>
+    </div>
+
+    <!-- Logs -->
+    @if (!Model.Logs.Any())
+    {
+        <div class="glass rounded-2xl p-12 text-center">
+            <i class="bi bi-journal text-5xl text-gray-300"></i>
+            <p class="mt-4 text-gray-500">Chưa có log nào cho ngày @Model.SelectedDate.ToString("dd/MM/yyyy")</p>
+            <a href="/NutritionLog/Create" class="inline-block mt-4 px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition">
+                Thêm Log
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="space-y-3">
+            @foreach (var log in Model.Logs)
+            {
+                <div class="glass rounded-2xl p-5 flex items-center gap-4">
+                    @if (log.ImageUrls.Length > 0)
+                    {
+                        <img src="@log.ImageUrls[0]" class="w-14 h-14 rounded-xl object-cover" alt="" />
+                    }
+                    else
+                    {
+                        <div class="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center">
+                            <i class="bi bi-cup-hot text-xl text-gray-300"></i>
+                        </div>
+                    }
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-gray-900">@log.MealName</h3>
+                        <p class="text-xs text-gray-400">x@log.Quantity</p>
+                    </div>
+                    <div class="text-right text-sm">
+                        <p class="font-bold text-amber-500">@log.Calories.ToString("N0") cal</p>
+                        <p class="text-xs text-gray-400">P:@log.Protein.ToString("N0") C:@log.Carbs.ToString("N0") F:@log.Fat.ToString("N0")</p>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>

@@ -1,0 +1,118 @@
+﻿@page
+@model MealPrep.Web.Pages.Subscription.PlansModel
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Chọn Gói Đăng Ký";
+}
+
+<!-- Step indicator -->
+<div class="max-w-3xl mx-auto mb-8">
+    <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-sm font-bold">1</div>
+            <span class="text-sm font-semibold text-white">Chọn Gói</span>
+        </div>
+        <div class="flex-1 h-px bg-white/10 mx-2"></div>
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-500 text-sm font-bold">2</div>
+            <span class="text-sm text-gray-500">Cấu Hình</span>
+        </div>
+        <div class="flex-1 h-px bg-white/10 mx-2"></div>
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-gray-500 text-sm font-bold">3</div>
+            <span class="text-sm text-gray-500">Thanh Toán</span>
+        </div>
+    </div>
+</div>
+
+<div class="text-center mb-10">
+    <h1 class="text-3xl font-bold mb-2">🌟 Chọn Gói Phù Hợp</h1>
+    <p class="text-gray-400 max-w-lg mx-auto">Bữa ăn lành mạnh, tươi ngon được giao tận nơi mỗi ngày. Hủy bất cứ lúc nào.</p>
+</div>
+
+@if (!Model.Plans.Any())
+{
+    <div class="glass rounded-2xl p-12 text-center max-w-md mx-auto">
+        <div class="text-5xl mb-4">📋</div>
+        <h3 class="text-lg font-bold mb-2">Chưa có gói</h3>
+        <p class="text-gray-400 text-sm">Hệ thống đang chuẩn bị các gói đăng ký. Vui lòng quay lại sau.</p>
+    </div>
+}
+else
+{
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        @foreach (var plan in Model.Plans)
+        {
+            var isPopular = plan.Name.Contains("Premium", StringComparison.OrdinalIgnoreCase)
+                         || plan.Name.Contains("Cao Cấp", StringComparison.OrdinalIgnoreCase)
+                         || plan.MealsPerDay >= 3;
+
+            <div class="glass rounded-2xl p-6 relative flex flex-col @(isPopular ? "ring-1 ring-emerald-500/30" : "")">
+                @if (isPopular)
+                {
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-xs font-bold rounded-full shadow-lg shadow-emerald-500/25 whitespace-nowrap">
+                        ⭐ Phổ Biến
+                    </div>
+                }
+
+                <div class="mb-5 mt-3">
+                    <h3 class="text-xl font-bold mb-1 text-white">@plan.Name</h3>
+                    @if (!string.IsNullOrEmpty(plan.Description))
+                    {
+                        <p class="text-sm text-gray-400">@plan.Description</p>
+                    }
+                </div>
+
+                <div class="mb-6 p-4 rounded-xl bg-white/[0.03]">
+                    <div class="flex items-baseline gap-1 mb-1">
+                        <span class="text-3xl font-extrabold text-emerald-400">@plan.BasePrice.ToString("N0")₫</span>
+                    </div>
+                    <p class="text-xs text-gray-500">cho @plan.DurationDays ngày · @plan.MealsPerDay bữa/ngày</p>
+                    @if (plan.ExtraPrice > 0)
+                    {
+                        <p class="text-xs text-blue-400 mt-1">Thêm bữa: +@plan.ExtraPrice.ToString("N0")₫/bữa</p>
+                    }
+                </div>
+
+                <div class="space-y-2.5 mb-6 flex-1">
+                    <div class="flex items-center gap-2.5 text-sm">
+                        <i class="bi bi-check-circle-fill text-emerald-400 flex-shrink-0"></i>
+                        <span class="text-gray-300">@plan.MealsPerDay bữa ăn tươi mỗi ngày</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-sm">
+                        <i class="bi bi-check-circle-fill text-emerald-400 flex-shrink-0"></i>
+                        <span class="text-gray-300">Giao hàng trong @plan.DurationDays ngày</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-sm">
+                        <i class="bi bi-check-circle-fill text-emerald-400 flex-shrink-0"></i>
+                        <span class="text-gray-300">Tự chọn thực đơn hàng tuần</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-sm">
+                        <i class="bi bi-check-circle-fill text-emerald-400 flex-shrink-0"></i>
+                        <span class="text-gray-300">Theo dõi dinh dưỡng miễn phí</span>
+                    </div>
+                    @if (plan.ExtraPrice > 0)
+                    {
+                        <div class="flex items-center gap-2.5 text-sm">
+                            <i class="bi bi-check-circle-fill text-emerald-400 flex-shrink-0"></i>
+                            <span class="text-gray-300">Tùy chỉnh số bữa linh hoạt</span>
+                        </div>
+                    }
+                </div>
+
+                <a href="/Subscription/Checkout?planId=@plan.Id"
+                   class="block w-full text-center py-3 rounded-xl font-semibold text-sm transition
+                          @(isPopular ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-[1.02] transform" : "bg-white/8 text-white hover:bg-white/15 border border-white/10")">
+                    Chọn Gói Này <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+        }
+    </div>
+
+    <!-- Info bar -->
+    <div class="max-w-3xl mx-auto mt-10 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 flex flex-wrap gap-6 justify-center text-sm text-gray-400">
+        <div class="flex items-center gap-2"><i class="bi bi-shield-check text-emerald-400"></i> Thanh toán an toàn qua Momo</div>
+        <div class="flex items-center gap-2"><i class="bi bi-arrow-repeat text-emerald-400"></i> Hủy bất cứ lúc nào</div>
+        <div class="flex items-center gap-2"><i class="bi bi-truck text-emerald-400"></i> Giao hàng tận nơi</div>
+    </div>
+}

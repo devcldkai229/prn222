@@ -1,0 +1,162 @@
+@page
+@model MealPrep.Web.Pages.Feedback.IndexModel
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Đánh Giá Món Ăn";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">⭐ Đánh Giá Món Ăn</h1>
+        <p class="text-gray-400 mt-1">Để lại nhận xét cho các món đã nhận để chúng tôi phục vụ tốt hơn.</p>
+    </div>
+</div>
+
+@Html.AntiForgeryToken()
+
+@if (Model.PendingFeedbacks.Count == 0)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">✅</div>
+        <h3 class="text-xl font-bold mb-2">Tuyệt vời!</h3>
+        <p class="text-gray-400">Bạn đã đánh giá tất cả các món. Quay lại sau khi nhận đơn hàng mới nhé!</p>
+    </div>
+}
+else
+{
+    <div class="space-y-4" id="feedbackList">
+        @foreach (var fb in Model.PendingFeedbacks)
+        {
+            <div class="glass rounded-2xl p-5" id="feedback-@fb.OrderItemId">
+                <div class="flex items-start gap-4">
+                    @if (fb.ImageUrls?.Length > 0)
+                    {
+                        <img src="@fb.ImageUrls[0]" alt="@fb.MealName"
+                             class="w-20 h-20 rounded-xl object-cover flex-shrink-0" />
+                    }
+                    else
+                    {
+                        <div class="w-20 h-20 rounded-xl bg-white/5 flex items-center justify-center text-3xl flex-shrink-0">🍽️</div>
+                    }
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-lg">@fb.MealName</h3>
+                        <p class="text-xs text-gray-500">
+                            Đơn hàng #@fb.OrderId • Giao ngày @fb.DeliveryDate.ToString("dd/MM/yyyy")
+                        </p>
+
+                        <!-- Stars -->
+                        <div class="flex items-center gap-1 mt-3 star-group" data-item="@fb.OrderItemId">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <button type="button" onclick="selectStar(@fb.OrderItemId, @i)"
+                                        class="star-btn text-2xl text-gray-600 hover:text-yellow-400 transition"
+                                        data-star="@i">☆</button>
+                            }
+                            <span class="ml-2 text-sm text-gray-500 star-label"></span>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="flex flex-wrap gap-2 mt-3 tag-group" data-item="@fb.OrderItemId">
+                            @foreach (var tag in new[] { "Ngon", "Tươi", "Đầy đủ", "Đóng gói đẹp", "Nhạt", "Thiếu món", "Nguội", "Khác" })
+                            {
+                                <button type="button" onclick="toggleTag(this)"
+                                        class="tag-btn px-3 py-1 rounded-lg text-xs bg-white/5 border border-white/10 text-gray-400 hover:border-emerald-500 transition"
+                                        data-tag="@tag">@tag</button>
+                            }
+                        </div>
+
+                        <!-- Comment -->
+                        <textarea placeholder="Nhận xét thêm (tùy chọn)..."
+                                  class="comment-box w-full mt-3 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none resize-none"
+                                  rows="2" data-item="@fb.OrderItemId"></textarea>
+
+                        <!-- Submit -->
+                        <button onclick="submitRating(@fb.OrderItemId, @fb.MealId, '@fb.DeliveryDate.ToString("yyyy-MM-dd")')"
+                                class="submit-btn mt-3 px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-semibold transition disabled:opacity-50"
+                                disabled>
+                            <i class="bi bi-send me-1"></i> Gửi Đánh Giá
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@section Scripts {
+    <script>
+        const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+        const ratings = {};
+
+        function selectStar(itemId, star) {
+            ratings[itemId] = star;
+            const labels = ['', 'Rất tệ', 'Tệ', 'Bình thường', 'Ngon', 'Tuyệt vời'];
+            const group = document.querySelector(`.star-group[data-item="${itemId}"]`);
+            group.querySelectorAll('.star-btn').forEach(b => {
+                const s = parseInt(b.dataset.star);
+                b.textContent = s <= star ? '★' : '☆';
+                b.classList.toggle('text-yellow-400', s <= star);
+                b.classList.toggle('text-gray-600', s > star);
+            });
+            group.querySelector('.star-label').textContent = labels[star];
+
+            const submitBtn = document.querySelector(`#feedback-${itemId} .submit-btn`);
+            if (submitBtn) submitBtn.disabled = false;
+        }
+
+        function toggleTag(btn) {
+            btn.classList.toggle('bg-emerald-500/20');
+            btn.classList.toggle('border-emerald-500');
+            btn.classList.toggle('text-emerald-400');
+        }
+
+        async function submitRating(itemId, mealId, deliveryDate) {
+            const stars = ratings[itemId];
+            if (!stars) return;
+
+            const tags = [];
+            document.querySelectorAll(`.tag-group[data-item="${itemId}"] .tag-btn.text-emerald-400`).forEach(b => tags.push(b.dataset.tag));
+            const comments = document.querySelector(`.comment-box[data-item="${itemId}"]`)?.value ?? '';
+
+            const btn = document.querySelector(`#feedback-${itemId} .submit-btn`);
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>';
+
+            try {
+                const res = await fetch('?handler=SubmitRating', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({
+                        orderItemId: itemId,
+                        mealId: mealId,
+                        stars: stars,
+                        tags: tags,
+                        comments: comments,
+                        deliveryDate: deliveryDate
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const card = document.getElementById(`feedback-${itemId}`);
+                    card.innerHTML = `
+                        <div class="text-center py-4">
+                            <div class="text-3xl mb-2">🎉</div>
+                            <p class="text-emerald-400 font-semibold">Cảm ơn bạn đã đánh giá!</p>
+                        </div>`;
+                    setTimeout(() => card.style.display = 'none', 3000);
+                } else {
+                    showToast(data.message || 'Có lỗi xảy ra.', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-send me-1"></i> Gửi Đánh Giá';
+                }
+            } catch {
+                showToast('Lỗi kết nối.', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send me-1"></i> Gửi Đánh Giá';
+            }
+        }
+    </script>
+}

@@ -1,0 +1,501 @@
+@page
+@model MealPrep.Web.Pages.Admin.DeliveryProcessingModel
+@using BusinessObjects.Enums
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Xử Lý Giao Hàng";
+
+    // Admin-visible statuses in the flow (not showing ConfirmedByUser — that's user side)
+    var adminStatuses = new[] { OrderStatus.Planned, OrderStatus.Preparing, OrderStatus.Delivering, OrderStatus.Delivered };
+
+    var byStatus = Model.Orders.GroupBy(o => o.Status).ToDictionary(g => g.Key, g => g.Count());
+    int totalOrders = Model.Orders.Count;
+}
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">⚙️ Xử Lý Giao Hàng</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Quản lý toàn bộ luồng giao hàng hằng ngày.</p>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] is string ok)
+{
+    <div class="mb-4 px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm flex items-center gap-2">
+        <i class="bi bi-check-circle-fill"></i> @ok
+    </div>
+}
+@if (TempData["ErrorMessage"] is string errMsg)
+{
+    <div class="mb-4 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+        <i class="bi bi-exclamation-circle-fill"></i> @errMsg
+    </div>
+}
+
+<!-- ── STEP INDICATOR ─────────────────────────────────────────────────────── -->
+<div class="glass rounded-2xl p-4 mb-6">
+    <div class="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+        @{
+            var steps = new[] {
+                ("Planned", "Đã lên kế hoạch", byStatus.GetValueOrDefault(OrderStatus.Planned)),
+                ("Preparing", "Đang chuẩn bị", byStatus.GetValueOrDefault(OrderStatus.Preparing)),
+                ("Delivering", "Đang giao", byStatus.GetValueOrDefault(OrderStatus.Delivering)),
+                ("Delivered", "Đã giao", byStatus.GetValueOrDefault(OrderStatus.Delivered)),
+                ("ConfirmedByUser", "User xác nhận", byStatus.GetValueOrDefault(OrderStatus.ConfirmedByUser)),
+            };
+            var stepColors = new[] { "bg-gray-200 text-gray-700", "bg-amber-100 text-amber-700", "bg-blue-100 text-blue-700", "bg-emerald-100 text-emerald-700", "bg-purple-100 text-purple-700" };
+        }
+        @for (int si = 0; si < steps.Length; si++)
+        {
+            var (key, label, count) = steps[si];
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl @stepColors[si]">
+                <span class="font-bold text-base">@count</span>
+                <span>@label</span>
+            </div>
+            @if (si < steps.Length - 1)
+            {
+                <i class="bi bi-arrow-right text-gray-300 text-sm"></i>
+            }
+        }
+        <span class="ml-auto font-semibold text-gray-600">Tổng: @totalOrders đơn</span>
+    </div>
+</div>
+
+<!-- ── TOOLBAR: Date + Filter + Generate ──────────────────────────────────── -->
+<div class="flex flex-wrap gap-3 mb-5 items-end">
+    <form method="get" class="flex flex-wrap gap-2 items-end">
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Ngày</label>
+            <input type="date" name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")"
+                   class="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Trạng thái</label>
+            <select name="StatusFilter" class="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                <option value="">Tất cả</option>
+                @foreach (var st in adminStatuses)
+                {
+                    <option value="@((int)st)" selected="@(Model.StatusFilter == st)">
+                        @DeliveryProcessingModel.StatusLabel(st)
+                    </option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm transition">
+            <i class="bi bi-search me-1"></i> Lọc
+        </button>
+    </form>
+
+    <!-- Generate + Bulk actions -->
+    <div class="flex gap-2 ml-auto">
+        <a href="?handler=DownloadCsv&TargetDate=@Model.TargetDate.ToString("yyyy-MM-dd")"
+           class="flex items-center gap-1.5 px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl text-sm transition">
+            <i class="bi bi-download"></i> Kitchen CSV
+        </a>
+        <button onclick="document.getElementById('generateModal').classList.remove('hidden')"
+                class="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition shadow-sm">
+            <i class="bi bi-lightning-fill"></i> Tạo Đơn Hàng
+        </button>
+    </div>
+</div>
+
+<!-- ── BULK ACTION BAR ────────────────────────────────────────────────────── -->
+<form method="post" asp-page-handler="BulkUpdateStatus" id="bulkForm">
+    <input type="hidden" name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" />
+    @if (Model.StatusFilter.HasValue)
+    {
+        <input type="hidden" name="StatusFilter" value="@((int)Model.StatusFilter.Value)" />
+    }
+    <div id="bulkBar" class="hidden glass rounded-xl px-4 py-3 mb-4 flex items-center gap-3 border-l-4 border-l-blue-400">
+        <span class="text-sm font-medium text-gray-700"><span id="selectedCount">0</span> đơn được chọn</span>
+        <div class="ml-auto flex items-center gap-2">
+            <select name="bulkStatus" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none">
+                @foreach (var st in adminStatuses)
+                {
+                    <option value="@((int)st)">→ @DeliveryProcessingModel.StatusLabel(st)</option>
+                }
+            </select>
+            <button type="submit" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition">
+                Áp dụng
+            </button>
+            <button type="button" onclick="clearSelection()" class="px-3 py-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 rounded-lg text-sm transition">
+                Bỏ chọn
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- ── ORDERS TABLE (outside bulk form to avoid nested forms) ───────────────── -->
+@if (Model.Orders.Any())
+    {
+        <div class="glass rounded-2xl overflow-hidden mb-8">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        <th class="px-4 py-3.5 text-left w-8">
+                            <input type="checkbox" id="checkAll" class="rounded w-4 h-4 cursor-pointer"
+                                   onchange="toggleAll(this)" />
+                        </th>
+                        <th class="px-4 py-3.5 text-left">Đơn</th>
+                        <th class="px-4 py-3.5 text-left">Khách hàng</th>
+                        <th class="px-4 py-3.5 text-left">Món</th>
+                        <th class="px-4 py-3.5 text-left">Shipper</th>
+                        <th class="px-4 py-3.5 text-center">Trạng thái</th>
+                        <th class="px-4 py-3.5 text-right">Hành động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var o in Model.Orders)
+                    {
+                        var nextStatus = DeliveryProcessingModel.NextAdminStatus(o.Status);
+                        <tr class="border-t border-gray-100 hover:bg-gray-50 transition" data-order-id="@o.OrderId">
+                            <!-- Checkbox: form="bulkForm" links to bulk form (no nested forms) -->
+                            <td class="px-4 py-3">
+                                <input type="checkbox" name="orderIds" value="@o.OrderId" form="bulkForm"
+                                       class="order-check rounded w-4 h-4 cursor-pointer"
+                                       onchange="updateBulkBar()" />
+                            </td>
+
+                            <!-- Order info -->
+                            <td class="px-4 py-3">
+                                <span class="font-mono font-semibold text-gray-700 text-xs">#@o.OrderId</span>
+                                <button type="button" onclick="showOrderDetail(@o.OrderId)" class="ml-2 text-xs text-emerald-600 hover:text-emerald-700 font-medium" title="Xem chi tiết">Chi tiết</button>
+                                @if (o.IsAutoFilled)
+                                {
+                                    <span class="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">AUTO</span>
+                                }
+                            </td>
+
+                            <!-- Customer -->
+                            <td class="px-4 py-3">
+                                <p class="font-medium text-gray-800 text-sm">@o.CustomerName</p>
+                                <p class="text-xs text-gray-400">@o.CustomerEmail</p>
+                                @if (!string.IsNullOrEmpty(o.DeliveryAddress))
+                                {
+                                    <p class="text-xs text-gray-400 truncate max-w-[160px]" title="@o.DeliveryAddress">
+                                        <i class="bi bi-geo-alt me-0.5"></i>@o.DeliveryAddress
+                                    </p>
+                                }
+                            </td>
+
+                            <!-- Meals -->
+                            <td class="px-4 py-3">
+                                @if (o.MealNames.Any())
+                                {
+                                    <div class="space-y-0.5">
+                                        @foreach (var m in o.MealNames.Take(3))
+                                        {
+                                            <span class="block text-xs text-gray-600 truncate max-w-[180px]">• @m</span>
+                                        }
+                                        @if (o.MealNames.Count > 3)
+                                        {
+                                            <span class="text-xs text-gray-400">+@(o.MealNames.Count - 3) món nữa</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-gray-300">—</span>
+                                }
+                            </td>
+
+                            <!-- Shipper: select + apply (AJAX, tránh nested form) -->
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-1.5">
+                                    <select class="shipper-select px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400 min-w-[120px]" data-order-id="@o.OrderId">
+                                        <option value="">— Chưa phân công</option>
+                                        @foreach (var s in Model.Shippers)
+                                        {
+                                            <option value="@s.Id" selected="@(o.ShipperId == s.Id)">@s.FullName</option>
+                                        }
+                                    </select>
+                                    <button type="button" onclick="assignShipper(@o.OrderId)" class="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-medium transition" title="Gán shipper">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                </div>
+                            </td>
+
+                            <!-- Status -->
+                            <td class="px-4 py-3 text-center">
+                                <span class="order-status-badge inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold @DeliveryProcessingModel.StatusBadgeClass(o.Status)">
+                                    @DeliveryProcessingModel.StatusLabel(o.Status)
+                                </span>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-1.5 justify-end">
+                                    @if (nextStatus.HasValue)
+                                    {
+                                        <form method="post" asp-page-handler="UpdateStatus" class="inline">
+                                            <input type="hidden" name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="orderId" value="@o.OrderId" />
+                                            <input type="hidden" name="newStatus" value="@((int)nextStatus.Value)" />
+                                            <button type="submit"
+                                                    class="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition">
+                                                <i class="bi bi-arrow-right-circle"></i>
+                                                @DeliveryProcessingModel.StatusLabel(nextStatus.Value)
+                                            </button>
+                                        </form>
+                                    }
+                                    <!-- Manual status select -->
+                                    <form method="post" asp-page-handler="UpdateStatus" class="inline flex items-center gap-1">
+                                        <input type="hidden" name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" />
+                                        <input type="hidden" name="orderId" value="@o.OrderId" />
+                                        <select name="newStatus"
+                                                class="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-400">
+                                            @foreach (var st in Enum.GetValues<OrderStatus>())
+                                            {
+                                                <option value="@((int)st)" selected="@(st == o.Status)">
+                                                    @DeliveryProcessingModel.StatusLabel(st)
+                                                </option>
+                                            }
+                                        </select>
+                                        <button type="submit"
+                                                class="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs transition"
+                                                title="Áp dụng">
+                                            <i class="bi bi-check-lg"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="glass rounded-2xl p-12 text-center mb-8">
+            <div class="text-4xl mb-3">📦</div>
+            <p class="text-gray-500 text-sm">Chưa có đơn hàng nào cho ngày <strong>@Model.TargetDate.ToString("dd/MM/yyyy")</strong>.</p>
+            <button onclick="document.getElementById('generateModal').classList.remove('hidden')"
+                    class="mt-4 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition">
+                <i class="bi bi-lightning-fill me-1"></i> Tạo Đơn Ngay
+            </button>
+        </div>
+    }
+
+<!-- ── KITCHEN PREP LIST ─────────────────────────────────────────────────── -->
+<div class="glass rounded-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+        <h3 class="font-bold text-gray-800">🍳 Danh Sách Bếp — @Model.TargetDate.ToString("dd/MM/yyyy")</h3>
+        <a href="?handler=DownloadCsv&TargetDate=@Model.TargetDate.ToString("yyyy-MM-dd")"
+           class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-emerald-600 transition">
+            <i class="bi bi-download"></i> Tải CSV
+        </a>
+    </div>
+
+    @if (Model.KitchenItems.Any())
+    {
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    <th class="px-5 py-3.5 text-left">Món ăn</th>
+                    <th class="px-5 py-3.5 text-right">Số suất</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.KitchenItems)
+                {
+                    <tr class="border-t border-gray-100 hover:bg-gray-50">
+                        <td class="px-5 py-3">
+                            <div class="flex items-center gap-3">
+                                @if (item.ImageUrls?.Length > 0)
+                                {
+                                    <img src="@item.ImageUrls[0]" class="w-9 h-9 rounded-lg object-cover" alt="" onerror="this.style.display='none'" />
+                                }
+                                else
+                                {
+                                    <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🍽️</div>
+                                }
+                                <span class="font-medium text-gray-800">@item.MealName</span>
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                            <span class="px-3 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-sm">@item.TotalQuantity suất</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="border-t-2 border-gray-200">
+                    <td class="px-5 py-3 font-bold text-gray-800">Tổng cộng</td>
+                    <td class="px-5 py-3 text-right font-bold text-emerald-600 text-base">@Model.KitchenItems.Sum(i => i.TotalQuantity) suất</td>
+                </tr>
+            </tfoot>
+        </table>
+    }
+    else
+    {
+        <div class="p-8 text-center text-gray-400 text-sm">Chưa có dữ liệu chuẩn bị cho ngày này.</div>
+    }
+</div>
+
+<!-- ── GENERATE MODAL ─────────────────────────────────────────────────────── -->
+<div id="generateModal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <h3 class="text-lg font-bold text-gray-900 mb-2">
+            <i class="bi bi-lightning-fill me-2 text-amber-500"></i>Tạo Đơn Hàng
+        </h3>
+        <p class="text-sm text-gray-500 mb-1">Ngày mục tiêu: <strong class="text-gray-800">@Model.TargetDate.ToString("dd/MM/yyyy")</strong></p>
+        <div class="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 space-y-1">
+            <p><i class="bi bi-check-circle me-1"></i> User đã chọn món → copy nguyên</p>
+            <p><i class="bi bi-magic me-1"></i> User chưa chọn → tự động từ thực đơn tuần đã công bố</p>
+            <p><i class="bi bi-shuffle me-1"></i> Không có thực đơn → ngẫu nhiên từ kho món hoạt động</p>
+        </div>
+        <form method="post" asp-page-handler="Generate" class="mt-5 flex gap-2 justify-end">
+            <input type="hidden" name="TargetDate" value="@Model.TargetDate.ToString("yyyy-MM-dd")" />
+            <button type="button" onclick="document.getElementById('generateModal').classList.add('hidden')"
+                    class="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
+                Hủy
+            </button>
+            <button type="submit"
+                    class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition">
+                <i class="bi bi-lightning-fill me-1"></i> Tạo
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div id="orderDetailModal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="closeOrderDetail()">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden" onclick="event.stopPropagation()">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="font-bold text-gray-900">Chi tiết đơn #<span id="detailOrderId">—</span></h3>
+            <button type="button" onclick="closeOrderDetail()" class="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div id="orderDetailContent" class="p-5 overflow-y-auto max-h-[70vh] space-y-4">
+            <p class="text-gray-500 text-sm">Đang tải...</p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function assignShipper(orderId) {
+            const select = document.querySelector(`.shipper-select[data-order-id="${orderId}"]`);
+            const shipperId = select?.value;
+            if (!shipperId) { showToast('Chọn shipper.', 'error'); return; }
+            const fd = new FormData();
+            fd.append('orderId', orderId);
+            fd.append('shipperId', shipperId);
+            fd.append('TargetDate', '@Model.TargetDate.ToString("yyyy-MM-dd")');
+            fd.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '');
+            try {
+                const r = await fetch('?handler=AssignShipper', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (r.redirected) { location.href = r.url; return; }
+                const data = await r.json();
+                if (data.success) { showToast('Đã gán shipper!'); }
+                else showToast(data.error || 'Lỗi', 'error');
+            } catch { showToast('Lỗi', 'error'); }
+        }
+        function updateBulkBar() {
+            const checked = document.querySelectorAll('.order-check:checked');
+            const bar = document.getElementById('bulkBar');
+            const count = document.getElementById('selectedCount');
+            count.textContent = checked.length;
+            bar.classList.toggle('hidden', checked.length === 0);
+            bar.classList.toggle('flex', checked.length > 0);
+        }
+        function toggleAll(cb) {
+            document.querySelectorAll('.order-check').forEach(c => { c.checked = cb.checked; });
+            updateBulkBar();
+        }
+        function clearSelection() {
+            document.querySelectorAll('.order-check, #checkAll').forEach(c => c.checked = false);
+            updateBulkBar();
+        }
+
+        const ORDER_ITEM_STATUS_LABEL = { 'Planned':'Đã lên lịch', 'Preparing':'Đang chuẩn bị', 'Delivering':'Đang giao', 'Delivered':'Đã giao', 'Confirmed':'Đã xác nhận' };
+        const ORDER_STATUS_LABEL = { 'Planned':'Đã lên kế hoạch', 'Preparing':'Đang chuẩn bị', 'Delivering':'Đang giao', 'Delivered':'Đã giao', 'ConfirmedByUser':'Đã xác nhận nhận hàng', 'Cancelled':'Đã hủy' };
+        async function showOrderDetail(orderId) {
+            const modal = document.getElementById('orderDetailModal');
+            const content = document.getElementById('orderDetailContent');
+            document.getElementById('detailOrderId').textContent = orderId;
+            content.innerHTML = '<p class="text-gray-500 text-sm">Đang tải...</p>';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const r = await fetch(`?handler=OrderDetail&orderId=${orderId}`);
+                const data = await r.json();
+                if (!data) { content.innerHTML = '<p class="text-red-500">Không tìm thấy đơn hàng.</p>'; return; }
+                let html = `<div class="space-y-3 text-sm">
+                    <p><strong>Khách hàng:</strong> ${data.customerName}</p>
+                    <p><strong>Email:</strong> ${data.customerEmail}</p>
+                    <p><strong>Địa chỉ:</strong> ${data.deliveryAddress || '—'}</p>
+                    <p><strong>Ngày giao:</strong> ${data.deliveryDate}</p>
+                    <p><strong>Shipper:</strong> ${data.shipperName || '—'}</p>
+                    <p><strong>Trạng thái đơn:</strong> <span id="detailOrderStatus" class="font-semibold">${data.statusLabel}</span></p>
+                    <hr class="border-gray-200">
+                    <p class="font-semibold text-gray-700">Món ăn:</p>
+                    <div id="detailOrderItems" class="space-y-2">`;
+                (data.items || []).forEach(i => {
+                    html += `<div class="flex items-center justify-between p-2 rounded-lg bg-gray-50" data-order-item-id="${i.orderItemId}">
+                        <span>${i.mealName} <span class="text-gray-500">(${i.deliverySlotName})</span></span>
+                        <span class="item-status-badge px-2 py-0.5 rounded text-xs font-medium">${ORDER_ITEM_STATUS_LABEL[i.status] || i.status}</span>
+                        ${(i.proofImageUrls || []).length ? `<img src="${i.proofImageUrls[0]}" class="w-12 h-12 rounded object-cover" alt="proof" />` : ''}
+                    </div>`;
+                });
+                html += '</div></div>';
+                content.innerHTML = html;
+                // Subscribe to realtime updates for this order
+                window._detailOrderId = orderId;
+            } catch (e) {
+                content.innerHTML = '<p class="text-red-500">Lỗi tải dữ liệu.</p>';
+            }
+        }
+        function closeOrderDetail() {
+            document.getElementById('orderDetailModal').classList.add('hidden');
+            document.getElementById('orderDetailModal').classList.remove('flex');
+            window._detailOrderId = null;
+        }
+        // Realtime: update detail modal when OrderStatusChanged/OrderItemStatusChanged
+        if (window.adminTrackConn) {
+            window.adminTrackConn.on('OrderStatusChanged', (orderId, status, source) => {
+                if (window._detailOrderId && parseInt(orderId, 10) === window._detailOrderId) {
+                    const el = document.getElementById('detailOrderStatus');
+                    if (el) el.textContent = ORDER_STATUS_LABEL[status] || status;
+                }
+            });
+            window.adminTrackConn.on('OrderItemStatusChanged', (orderItemId, orderId, status, proofUrl) => {
+                if (window._detailOrderId && parseInt(orderId, 10) === window._detailOrderId) {
+                    const itemEl = document.querySelector(`[data-order-item-id="${orderItemId}"]`);
+                    if (itemEl) {
+                        const badge = itemEl.querySelector('.item-status-badge');
+                        if (badge) badge.textContent = ORDER_ITEM_STATUS_LABEL[status] || status;
+                        if (status === 'Delivered' && proofUrl) {
+                            const imgWrap = itemEl.querySelector('.proof-img-wrap');
+                            if (!imgWrap) {
+                                const div = document.createElement('div');
+                                div.className = 'proof-img-wrap mt-2 flex gap-2 flex-wrap';
+                                const img = document.createElement('img');
+                                img.src = proofUrl;
+                                img.alt = 'Ảnh chứng minh';
+                                img.className = 'w-12 h-12 rounded object-cover border border-gray-200 cursor-pointer';
+                                img.onclick = () => window.open(proofUrl, '_blank');
+                                div.appendChild(img);
+                                itemEl.appendChild(div);
+                            } else {
+                                const imgs = imgWrap.querySelectorAll('img');
+                                if (!Array.from(imgs).some(i => i.src === proofUrl)) {
+                                    const img = document.createElement('img');
+                                    img.src = proofUrl;
+                                    img.alt = 'Ảnh chứng minh';
+                                    img.className = 'w-12 h-12 rounded object-cover border border-gray-200 cursor-pointer';
+                                    img.onclick = () => window.open(proofUrl, '_blank');
+                                    imgWrap.appendChild(img);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+}
+
+

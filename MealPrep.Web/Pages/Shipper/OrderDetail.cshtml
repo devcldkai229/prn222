@@ -1,0 +1,133 @@
+@page
+@model MealPrep.Web.Pages.Shipper.OrderDetailModel
+@using BusinessObjects.Enums
+@{
+    ViewData["Title"] = "Chi tiết đơn #" + Model.Order?.OrderId;
+}
+@Html.AntiForgeryToken()
+
+@if (Model.Order == null)
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <p class="text-gray-600">Không tìm thấy đơn hàng.</p>
+        <a href="/Shipper/Delivery" class="inline-block mt-4 text-emerald-600 hover:text-emerald-700">← Quay lại</a>
+    </div>
+}
+else
+{
+    var o = Model.Order;
+    <div class="space-y-6">
+        <div class="flex items-center justify-between">
+            <a href="/Shipper/Delivery" class="text-emerald-600 hover:text-emerald-700 text-sm"><i class="bi bi-arrow-left me-1"></i>Quay lại</a>
+            <span class="order-status-badge px-3 py-1 rounded-lg text-xs font-medium
+                @(o.Status == OrderStatus.Delivered || o.Status == OrderStatus.ConfirmedByUser ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")">
+                @o.Status
+            </span>
+        </div>
+        <div class="glass rounded-2xl p-6">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Đơn #@o.OrderId — @o.CustomerName</h2>
+            <p class="text-gray-600 text-sm mb-4"><i class="bi bi-clock me-1"></i> @o.DeliverySlotName</p>
+
+            <form method="post" asp-page-handler="UpdateOrderStatus" class="flex items-center gap-2 mb-6">
+                <input type="hidden" name="orderId" value="@o.OrderId" />
+                <label class="text-sm text-gray-600">Trạng thái đơn:</label>
+                <select name="newStatus" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-emerald-500">
+                    @foreach (var st in Enum.GetValues<OrderStatus>())
+                    {
+                        if (st.ToString() is "Disputed" or "ConfirmedByUser") continue;
+                        <option value="@((int)st)" selected="@(st == o.Status)">@st</option>
+                    }
+                </select>
+                <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition">Cập nhật</button>
+            </form>
+
+            <h3 class="font-semibold text-gray-900 mb-3">Chi tiết món</h3>
+            <div class="space-y-3">
+                @foreach (var item in o.Items)
+                {
+                    <div class="flex items-center gap-4 p-4 rounded-xl bg-gray-50 border border-gray-200" id="item-@item.OrderItemId">
+                        @if (item.MealImageUrls?.Length > 0)
+                        {
+                            <img src="@item.MealImageUrls[0]" alt="" class="w-14 h-14 rounded-lg object-cover" />
+                        }
+                        else
+                        {
+                            <div class="w-14 h-14 rounded-lg bg-gray-200 flex items-center justify-center text-xl">🍽️</div>
+                        }
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap mb-1">
+                                <span class="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">@item.DeliverySlotName</span>
+                                <span class="text-xs text-gray-500">@item.Status</span>
+                            </div>
+                            <p class="font-medium text-gray-900">@item.MealName</p>
+                            <p class="text-xs text-gray-600">@item.DeliveryAddress</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <form method="post" asp-page-handler="UpdateOrderItemStatus" class="flex items-center gap-1">
+                                <input type="hidden" name="orderItemId" value="@item.OrderItemId" />
+                                <select name="newStatus" class="px-2 py-1.5 bg-white border border-gray-300 rounded text-xs text-gray-900">
+                                    @foreach (OrderItemStatus ist in Enum.GetValues<OrderItemStatus>())
+                                    {
+                                        <option value="@((int)ist)" selected="@(ist == item.Status)">@ist</option>
+                                    }
+                                </select>
+                                <button type="submit" class="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded">OK</button>
+                            </form>
+                            @if (item.IsDelivered)
+                            {
+                                <span class="text-emerald-600 text-xs font-medium">Đã giao</span>
+                                @if (item.ProofImageUrls?.Length > 0)
+                                {
+                                    <div class="flex gap-1">
+                                        @foreach (var url in item.ProofImageUrls)
+                                        {
+                                            <img src="@url" alt="Proof" class="w-8 h-8 rounded object-cover cursor-pointer hover:opacity-80" onclick="showLightbox(this.src)" />
+                                        }
+                                    </div>
+                                }
+                                <button type="button" onclick="openCamera(@item.OrderItemId)" class="text-xs text-emerald-600 hover:text-emerald-700">+ Thêm ảnh</button>
+                            }
+                            else
+                            {
+                                <button type="button" onclick="openCamera(@item.OrderItemId)" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs rounded-lg">
+                                    <i class="bi bi-camera me-1"></i> Chụp ảnh
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<input type="file" id="photoInput" accept="image/*" capture="environment" multiple class="hidden" />
+<div id="lightbox" class="fixed inset-0 bg-black/80 z-50 hidden flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+    <img id="lightboxImg" class="max-w-full max-h-full rounded-xl" />
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        let currentItemId = null;
+        function openCamera(id) { currentItemId = id; document.getElementById('photoInput').click(); }
+        document.getElementById('photoInput')?.addEventListener('change', async function() {
+            if (!this.files?.length || !currentItemId) return;
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+            for (let i = 0; i < this.files.length; i++) {
+                const fd = new FormData();
+                fd.append('orderItemId', currentItemId);
+                fd.append('photo', this.files[i]);
+                try {
+                    const r = await fetch('?handler=UploadProof', { method: 'POST', headers: { 'RequestVerificationToken': token }, body: fd });
+                    const d = await r.json();
+                    if (d.success) showToast('Đã thêm ảnh!');
+                    else { showToast(d.error || 'Lỗi', 'error'); break; }
+                } catch { showToast('Lỗi kết nối', 'error'); break; }
+            }
+            this.value = ''; currentItemId = null;
+            location.reload();
+        });
+        function showLightbox(src) { event?.stopPropagation(); document.getElementById('lightboxImg').src = src; document.getElementById('lightbox').classList.remove('hidden'); }
+    </script>
+}

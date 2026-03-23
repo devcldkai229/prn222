@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="BusinessObjects/BusinessObjects.csproj" Id="07eee313-a8d8-47d2-b225-7aa73b71085a" />
+  <Project Path="MealPrep.BLL/MealPrep.BLL.csproj" />
+  <Project Path="MealPrep.DAL/MealPrep.DAL.csproj" />
+  <Project Path="MealPrep.Web/MealPrep.Web.csproj" />
+</Solution>

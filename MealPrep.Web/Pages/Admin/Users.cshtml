@@ -1,0 +1,178 @@
+@page
+@model MealPrep.Web.Pages.Admin.UsersModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Quản Lý Người Dùng";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">👥 Quản Lý Người Dùng</h1>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.SuccessMessage))
+{
+    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-check-circle me-1"></i> @Model.SuccessMessage
+    </div>
+}
+@if (!string.IsNullOrEmpty(Model.ErrorMessage))
+{
+    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-exclamation-circle me-1"></i> @Model.ErrorMessage
+    </div>
+}
+
+<!-- Filters -->
+<form method="get" class="glass rounded-2xl p-4 mb-6">
+    <div class="flex flex-wrap gap-3 items-end">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs text-gray-500 mb-1">Tìm kiếm</label>
+            <input type="text" name="Search" value="@Model.Search" placeholder="Tên, email..."
+                   class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none" />
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Trạng thái</label>
+            <select name="IsActive" class="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none">
+                <option value="">Tất cả</option>
+                <option value="true" selected="@(Model.IsActive == true)">Hoạt động</option>
+                <option value="false" selected="@(Model.IsActive == false)">Vô hiệu</option>
+            </select>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm transition">
+            <i class="bi bi-search me-1"></i> Lọc
+        </button>
+    </div>
+</form>
+
+<!-- Users Table -->
+<div class="glass rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-gray-500 text-xs uppercase border-b border-white/10">
+                    <th class="text-left py-3 px-4">Người dùng</th>
+                    <th class="text-left py-3 px-4">Vai trò</th>
+                    <th class="text-center py-3 px-4">Đăng ký</th>
+                    <th class="text-left py-3 px-4">Ngày tạo</th>
+                    <th class="text-center py-3 px-4">Trạng thái</th>
+                    <th class="text-right py-3 px-4">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in Model.Result.Items)
+                {
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02]">
+                        <td class="py-3 px-4">
+                            <p class="font-medium">@u.FullName</p>
+                            <p class="text-xs text-gray-500">@u.Email</p>
+                            @if (!string.IsNullOrEmpty(u.PhoneNumber))
+                            {
+                                <p class="text-xs text-gray-600">@u.PhoneNumber</p>
+                            }
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="px-2 py-1 rounded-lg text-xs font-medium
+                                @(u.RoleName == "Admin" ? "bg-purple-500/10 text-purple-400" :
+                                  u.RoleName == "Shipper" ? "bg-blue-500/10 text-blue-400" :
+                                  "bg-gray-500/10 text-gray-400")">
+                                @(u.RoleName ?? "User")
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-center">@u.SubscriptionCount</td>
+                        <td class="py-3 px-4 text-gray-400 text-xs">@u.CreatedAtUtc.ToString("dd/MM/yyyy")</td>
+                        <td class="py-3 px-4 text-center">
+                            @if (u.IsActive)
+                            {
+                                <span class="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs">Hoạt động</span>
+                            }
+                            else
+                            {
+                                <span class="px-2 py-1 bg-red-500/10 text-red-400 rounded-lg text-xs">Vô hiệu</span>
+                            }
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            @if (u.IsActive)
+                            {
+                                <button onclick="showDeactivateModal('@u.Id', '@u.FullName')"
+                                        class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs rounded-lg transition">
+                                    Vô hiệu hóa
+                                </button>
+                            }
+                            else
+                            {
+                                <form method="post" asp-page-handler="Reactivate" class="inline">
+                                    <input type="hidden" name="userId" value="@u.Id" />
+                                    <button type="submit"
+                                            class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs rounded-lg transition">
+                                        Kích hoạt lại
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginator -->
+    @if (Model.Result.TotalPages > 1)
+    {
+        <div class="flex items-center justify-between p-4 border-t border-white/10">
+            <p class="text-xs text-gray-500">Trang @Model.Result.Page / @Model.Result.TotalPages (@Model.Result.TotalCount mục)</p>
+            <div class="flex gap-1">
+                @for (int i = 1; i <= Model.Result.TotalPages; i++)
+                {
+                    <a href="?PageIndex=@i&Search=@Model.Search&IsActive=@Model.IsActive"
+                       class="w-8 h-8 flex items-center justify-center text-xs rounded-lg transition
+                       @(i == Model.Result.Page ? "bg-emerald-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10")">
+                        @i
+                    </a>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Deactivate Modal -->
+<div id="deactivateModal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+    <div class="glass rounded-2xl p-6 max-w-md w-full" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2 text-red-400"><i class="bi bi-exclamation-triangle me-2"></i>Vô hiệu hóa tài khoản</h3>
+        <p class="text-sm text-gray-400 mb-4">Nhập <strong class="text-white">CONFIRM</strong> để xác nhận vô hiệu hóa tài khoản <span id="deactivateUserName" class="text-white font-semibold"></span>.</p>
+        <input type="text" id="confirmInput" placeholder="Nhập CONFIRM"
+               class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-red-500 focus:outline-none mb-4" />
+        <form method="post" asp-page-handler="Deactivate" id="deactivateForm">
+            <input type="hidden" name="userId" id="deactivateUserId" />
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="hideDeactivateModal()" class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-sm transition">Hủy</button>
+                <button type="submit" id="deactivateBtn" disabled
+                        class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm transition disabled:opacity-50">
+                    Vô hiệu hóa
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showDeactivateModal(userId, userName) {
+            document.getElementById('deactivateUserId').value = userId;
+            document.getElementById('deactivateUserName').textContent = userName;
+            document.getElementById('confirmInput').value = '';
+            document.getElementById('deactivateBtn').disabled = true;
+            document.getElementById('deactivateModal').classList.remove('hidden');
+        }
+
+        function hideDeactivateModal() {
+            document.getElementById('deactivateModal').classList.add('hidden');
+        }
+
+        document.getElementById('confirmInput').addEventListener('input', function () {
+            document.getElementById('deactivateBtn').disabled = this.value !== 'CONFIRM';
+        });
+
+        document.getElementById('deactivateModal').addEventListener('click', hideDeactivateModal);
+    </script>
+}

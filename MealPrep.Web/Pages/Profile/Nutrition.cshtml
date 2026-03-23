@@ -1,0 +1,223 @@
+@page
+@model MealPrep.Web.Pages.Profile.NutritionModel
+@using BusinessObjects.Enums
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Hồ Sơ & Dinh Dưỡng";
+    var p = Model.Profile;
+}
+
+<div class="mb-6">
+    <h1 class="text-2xl font-bold">👤 Hồ Sơ & Dinh Dưỡng</h1>
+    <p class="text-gray-400 mt-1">Quản lý thông tin cá nhân và mục tiêu dinh dưỡng.</p>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="glass rounded-xl p-4 mb-6 flex items-center gap-3 border-emerald-500/30 text-emerald-400">
+        <i class="bi bi-check-circle-fill text-lg"></i>
+        <span class="text-sm font-medium">@TempData["SuccessMessage"]</span>
+    </div>
+}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- LEFT: Profile Card -->
+    <div>
+        <div class="glass rounded-2xl p-6 text-center mb-6">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                @(p.FullName.Length > 0 ? p.FullName[0].ToString().ToUpper() : "U")
+            </div>
+            <h2 class="text-lg font-bold">@p.FullName</h2>
+            <p class="text-sm text-gray-400">@p.Email</p>
+            @if (!string.IsNullOrEmpty(p.PhoneNumber))
+            {
+                <p class="text-xs text-gray-500 mt-1"><i class="bi bi-phone me-1"></i>@p.PhoneNumber</p>
+            }
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="glass rounded-2xl p-6">
+            <h3 class="font-bold text-sm mb-4 text-gray-300">Thông Số Cơ Thể</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Chiều cao</span>
+                    <span class="font-semibold">@p.HeightCm cm</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Cân nặng</span>
+                    <span class="font-semibold">@p.WeightKg kg</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Tuổi</span>
+                    <span class="font-semibold">@p.Age</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Giới tính</span>
+                    <span class="font-semibold">@p.Gender</span>
+                </div>
+                @if (p.CaloriesInDay.HasValue)
+                {
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-400">Calo / ngày</span>
+                        <span class="font-semibold text-emerald-400">@p.CaloriesInDay kcal</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: Edit Form -->
+    <div class="lg:col-span-2">
+        <form method="post" asp-page-handler="UpdateProfile" class="glass rounded-2xl p-6">
+            @Html.AntiForgeryToken()
+
+            <h2 class="text-lg font-bold mb-6">Chỉnh Sửa Thông Tin</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Chiều Cao (cm)</label>
+                    <input name="dto.HeightCm" value="@p.HeightCm" type="number" min="100" max="250"
+                           class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Cân Nặng (kg)</label>
+                    <input name="dto.WeightKg" value="@p.WeightKg" type="number" min="20" max="300" step="0.1"
+                           class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Tuổi</label>
+                    <input name="dto.Age" value="@p.Age" type="number" min="10" max="120"
+                           class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Giới Tính</label>
+                    <select name="dto.Gender"
+                            class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition">
+                        @foreach (var g in Enum.GetValues<Gender>())
+                        {
+                            <option value="@g" selected="@(p.Gender == g)">@g</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Mục Tiêu</label>
+                    <select name="dto.Goal"
+                            class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition">
+                        @foreach (var g in Enum.GetValues<FitnessGoal>())
+                        {
+                            <option value="@g" selected="@(p.Goal == g)">@g</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Mức Hoạt Động</label>
+                    <select name="dto.ActivityLevel"
+                            class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition">
+                        @foreach (var a in Enum.GetValues<ActivityLevel>())
+                        {
+                            <option value="@a" selected="@(p.ActivityLevel == a)">@a</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Chế Độ Ăn</label>
+                    <select name="dto.DietPreference"
+                            class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition">
+                        @foreach (var d in Enum.GetValues<DietPreference>())
+                        {
+                            <option value="@d" selected="@(p.DietPreference == d)">@d</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Calo / Ngày (tùy chỉnh)</label>
+                    <input name="dto.CaloriesInDay" value="@p.CaloriesInDay" type="number" min="500" max="10000"
+                           class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:border-emerald-500 focus:outline-none transition"
+                           placeholder="Để trống = tự tính" />
+                </div>
+            </div>
+
+            <!-- Delivery Address -->
+            <div class="mb-5">
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Địa Chỉ Giao Hàng</label>
+                <input name="dto.DeliveryAddress" value="@p.DeliveryAddress" type="text"
+                       placeholder="Nhập địa chỉ..."
+                       class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:border-emerald-500 focus:outline-none transition" />
+            </div>
+
+            <!-- Phone -->
+            <div class="mb-5">
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Số Điện Thoại</label>
+                <input name="dto.PhoneNumber" value="@p.PhoneNumber" type="tel"
+                       placeholder="0912 345 678"
+                       class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:border-emerald-500 focus:outline-none transition" />
+            </div>
+
+            <!-- Allergies -->
+            <div class="mb-6">
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Dị Ứng</label>
+                <input name="dto.Allergies" value="@(string.Join(", ", p.Allergies))" type="text"
+                       placeholder="VD: đậu phộng, sữa, tôm..."
+                       class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:border-emerald-500 focus:outline-none transition" />
+                <p class="text-xs text-gray-500 mt-1">Cách nhau bởi dấu phẩy</p>
+            </div>
+
+            <button type="submit"
+                    class="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold text-sm rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 transition">
+                <i class="bi bi-check-lg me-2"></i>Lưu Thay Đổi
+            </button>
+        </form>
+
+        <!-- Disliked Meals -->
+        @if (p.DislikedMeals.Any())
+        {
+            <div class="glass rounded-2xl p-6 mt-6">
+                <h2 class="font-bold mb-4">🚫 Món Không Thích</h2>
+                <div class="space-y-3">
+                    @foreach (var meal in p.DislikedMeals)
+                    {
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03]" id="disliked-@meal.Id">
+                            @if (meal.ImageUrls?.Length > 0)
+                            {
+                                <img src="@meal.ImageUrls[0]" alt="@meal.Name" class="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                            }
+                            else
+                            {
+                                <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">🍽️</div>
+                            }
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate">@meal.Name</p>
+                                <p class="text-xs text-gray-500">@meal.Calories kcal</p>
+                            </div>
+                            <button onclick="unblockMeal(@meal.Id)"
+                                    class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 transition">
+                                Bỏ chặn
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function unblockMeal(mealId) {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+            const res = await fetch(`?handler=UnblockMeal&mealId=${mealId}`, {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': token }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const el = document.getElementById(`disliked-${mealId}`);
+                if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
+                showToast(data.message);
+            }
+        }
+    </script>
+}

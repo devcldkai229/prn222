@@ -1,0 +1,108 @@
+@page
+@model MealPrep.Web.Pages.Admin.FeedbackReportModel
+@{
+    ViewData["Title"] = "Báo Cáo Đánh Giá";
+    Layout = "_AdminLayout";
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">
+            <i class="bi bi-bar-chart me-2 text-amber-500"></i>Báo Cáo Đánh Giá Món Ăn
+        </h1>
+    </div>
+
+    <!-- Filter -->
+    <div class="glass rounded-2xl p-4">
+        <form method="get" class="flex items-center gap-3">
+            <label class="text-sm text-gray-600">Tối thiểu</label>
+            <input type="number" name="minRatings" value="@Model.MinRatings" min="1" max="100"
+                   class="w-20 px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+            <span class="text-sm text-gray-600">đánh giá</span>
+            <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+                Lọc
+            </button>
+        </form>
+    </div>
+
+    <div id="feedback-empty" class="@(Model.Report.Any() ? "hidden" : "")">
+        <div class="glass rounded-2xl p-12 text-center">
+            <i class="bi bi-emoji-smile text-5xl text-gray-300"></i>
+            <p class="mt-4 text-gray-500">Chưa có món nào đủ số lượng đánh giá.</p>
+        </div>
+    </div>
+    <div id="feedback-report-table" class="@(!Model.Report.Any() ? "hidden" : "")">
+        <div class="glass rounded-2xl overflow-hidden">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 text-gray-500 text-left">
+                        <th class="px-6 py-3 font-medium">Món Ăn</th>
+                        <th class="px-6 py-3 font-medium text-center">Trung Bình</th>
+                        <th class="px-6 py-3 font-medium text-center">Tổng ĐG</th>
+                        <th class="px-6 py-3 font-medium text-center">1⭐</th>
+                        <th class="px-6 py-3 font-medium text-center">2⭐</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach (var m in Model.Report)
+                    {
+                        var color = m.AverageStars < 2.5 ? "red" : m.AverageStars < 3.5 ? "amber" : "emerald";
+                        <tr class="hover:bg-slate-50 transition feedback-row" data-meal-id="@m.MealId">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    @if (m.ImageUrls.Length > 0)
+                                    {
+                                        <img src="@m.ImageUrls[0]" class="w-10 h-10 rounded-lg object-cover" alt="" />
+                                    }
+                                    <span class="font-medium text-gray-900">@m.MealName</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 rounded-full text-sm font-semibold bg-@(color)-100 text-@(color)-700">
+                                    @m.AverageStars.ToString("F1") ⭐
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center font-semibold">@m.TotalRatings</td>
+                            <td class="px-6 py-4 text-center text-red-500 font-semibold">@m.OneStarCount</td>
+                            <td class="px-6 py-4 text-center text-amber-500 font-semibold">@m.TwoStarCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function initFeedbackReportRealtime() {
+            const trackConn = window.adminTrackConn;
+            if (!trackConn) return;
+            const minRatings = @Model.MinRatings;
+            async function refreshReport() {
+                try {
+                    const res = await fetch(`?handler=ReportJson&minRatings=${minRatings}`);
+                    const report = await res.json();
+                    const tbody = document.querySelector('#feedback-report-table tbody');
+                    const emptyEl = document.getElementById('feedback-empty');
+                    const tableEl = document.getElementById('feedback-report-table');
+                    if (!report || report.length === 0) {
+                        emptyEl.classList.remove('hidden');
+                        tableEl.classList.add('hidden');
+                        return;
+                    }
+                    emptyEl.classList.add('hidden');
+                    tableEl.classList.remove('hidden');
+                    const rows = report.map(m => {
+                        const badgeClass = m.averageStars < 2.5 ? 'bg-red-100 text-red-700' : m.averageStars < 3.5 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+                        const img = (m.imageUrls && m.imageUrls[0]) ? `<img src="${m.imageUrls[0].replace(/"/g, '&quot;')}" class="w-10 h-10 rounded-lg object-cover" alt="" />` : '';
+                        return `<tr class="hover:bg-slate-50 transition feedback-row" data-meal-id="${m.mealId}"><td class="px-6 py-4"><div class="flex items-center gap-3">${img}<span class="font-medium text-gray-900">${(m.mealName||'').replace(/</g,'&lt;')}</span></div></td><td class="px-6 py-4 text-center"><span class="px-3 py-1 rounded-full text-sm font-semibold ${badgeClass}">${(m.averageStars||0).toFixed(1)} ⭐</span></td><td class="px-6 py-4 text-center font-semibold">${m.totalRatings||0}</td><td class="px-6 py-4 text-center text-red-500 font-semibold">${m.oneStarCount||0}</td><td class="px-6 py-4 text-center text-amber-500 font-semibold">${m.twoStarCount||0}</td></tr>`;
+                    }).join('');
+                    tbody.innerHTML = rows;
+                    if (typeof showToast === 'function') showToast('⭐ Báo cáo đánh giá đã cập nhật');
+                } catch (e) { console.warn('FeedbackReport refresh:', e); }
+            }
+            trackConn.on('MealRated', () => refreshReport());
+        })();
+    </script>
+}

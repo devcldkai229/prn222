@@ -1,0 +1,135 @@
+@page
+@model MealPrep.Web.Pages.Admin.DeliveryOrdersModel
+@using BusinessObjects.Enums
+@using MealPrep.BLL.Services
+@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Đơn Giao Hàng";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">📦 Đơn Giao Hàng</h1>
+</div>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-check-circle me-1"></i> @success
+    </div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-sm">
+        <i class="bi bi-exclamation-circle me-1"></i> @error
+    </div>
+}
+
+<!-- Filters -->
+<form method="get" class="glass rounded-2xl p-4 mb-6">
+    <div class="flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Ngày giao</label>
+            <input type="date" name="SelectedDate" value="@Model.SelectedDate.ToString("yyyy-MM-dd")"
+                   class="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none" />
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Trạng thái</label>
+            <select name="StatusFilter" class="px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none">
+                <option value="">Tất cả</option>
+                @foreach (var st in Enum.GetValues<OrderStatus>())
+                {
+                    <option value="@st" selected="@(Model.StatusFilter == st)">@st</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm transition">
+            <i class="bi bi-search me-1"></i> Lọc
+        </button>
+    </div>
+</form>
+
+<!-- Orders Table -->
+<div class="glass rounded-2xl overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-gray-500 text-xs uppercase border-b border-white/10">
+                    <th class="text-left py-3 px-4">ID</th>
+                    <th class="text-left py-3 px-4">Khách hàng</th>
+                    <th class="text-left py-3 px-4">Địa chỉ</th>
+                    <th class="text-left py-3 px-4">Khung giờ</th>
+                    <th class="text-center py-3 px-4">Món</th>
+                    <th class="text-center py-3 px-4">Trạng thái</th>
+                    <th class="text-left py-3 px-4">Shipper</th>
+                    <th class="text-right py-3 px-4">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var o in Model.Orders)
+                {
+                    var statusBadge = o.Status switch {
+                        OrderStatus.Planned => "bg-gray-500/10 text-gray-400",
+                        OrderStatus.InProgress => "bg-yellow-500/10 text-yellow-400",
+                        OrderStatus.Delivered => "bg-emerald-500/10 text-emerald-400",
+                        OrderStatus.Completed => "bg-blue-500/10 text-blue-400",
+                        OrderStatus.Cancelled => "bg-red-500/10 text-red-400",
+                        OrderStatus.Disputed => "bg-orange-500/10 text-orange-400",
+                        _ => "bg-gray-500/10 text-gray-400"
+                    };
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02]" data-order-id="@o.OrderId">
+                        <td class="py-3 px-4 text-gray-400">#@o.OrderId</td>
+                        <td class="py-3 px-4">
+                            <p class="font-medium text-sm">@o.CustomerName</p>
+                            <p class="text-xs text-gray-500">@o.CustomerEmail</p>
+                        </td>
+                        <td class="py-3 px-4 text-xs text-gray-400 max-w-[150px] truncate">@o.DeliveryAddress</td>
+                        <td class="py-3 px-4 text-xs">@(o.SlotName ?? "—")</td>
+                        <td class="py-3 px-4 text-center">@o.ItemCount</td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="order-status-badge px-2 py-1 rounded-lg text-xs font-medium @statusBadge">@o.Status</span>
+                        </td>
+                        <td class="py-3 px-4 text-xs">@(o.ShipperName ?? "—")</td>
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2 justify-end">
+                                <!-- Assign Shipper -->
+                                <form method="post" asp-page-handler="AssignShipper" class="flex items-center gap-1">
+                                    <input type="hidden" name="orderId" value="@o.OrderId" />
+                                    <select name="shipperId" class="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:outline-none">
+                                        <option value="">Shipper...</option>
+                                        @foreach (var s in Model.Shippers)
+                                        {
+                                            <option value="@s.Id" selected="@(s.Id == o.ShipperId)">@s.FullName</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-xs rounded-lg" title="Gán shipper">
+                                        <i class="bi bi-person-check"></i>
+                                    </button>
+                                </form>
+                                <!-- Update Status -->
+                                <form method="post" asp-page-handler="UpdateStatus" class="flex items-center gap-1">
+                                    <input type="hidden" name="orderId" value="@o.OrderId" />
+                                    <select name="newStatus" class="px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:outline-none">
+                                        @foreach (var st in Enum.GetValues<OrderStatus>())
+                                        {
+                                            <option value="@st" selected="@(st == o.Status)">@st</option>
+                                        }
+                                    </select>
+                                    <button type="submit" class="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs rounded-lg" title="Cập nhật trạng thái">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (Model.Orders.Count == 0)
+    {
+        <div class="p-8 text-center text-gray-500 text-sm">
+            Không có đơn hàng nào cho ngày đã chọn.
+        </div>
+    }
+</div>

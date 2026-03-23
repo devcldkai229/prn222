@@ -1,0 +1,482 @@
+@page
+@model MealPrep.Web.Pages.Menu.SelectMealsModel
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Chọn Món Ăn";
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var canPrev = Model.ViewStart > Model.SubscriptionStart;
+    var canNext = Model.ViewStart.AddDays(6) < Model.SubscriptionEnd;
+    var prevStart = (Model.ViewStart.AddDays(-7) < Model.SubscriptionStart) ? Model.SubscriptionStart : Model.ViewStart.AddDays(-7);
+    var nextStart = Model.ViewStart.AddDays(7);
+}
+
+<div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+    <div>
+        <h1 class="text-2xl font-bold">📅 Chọn Món Ăn</h1>
+        <p class="text-gray-400 mt-1">Gói từ @Model.SubscriptionStart.ToString("dd/MM/yyyy") → @Model.SubscriptionEnd.ToString("dd/MM/yyyy") (@Model.MealsPerDay bữa/ngày)</p>
+    </div>
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+        <div class="flex-1 min-w-[220px]">
+            <label for="weeklyNotesInput" class="block text-xs text-gray-400 mb-1.5">Bạn muốn ăn thế nào? (tùy chọn)</label>
+            <input type="text" id="weeklyNotesInput" placeholder="VD: Ưu tiên món giàu protein, ít tinh bột..."
+                   class="w-full h-10 px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400/50 focus:outline-none transition" />
+        </div>
+        <button type="button"
+                id="btn-generate-ai"
+                onclick="generateAiForWeek()"
+                class="h-10 px-5 rounded-xl bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold flex items-center justify-center gap-2 transition shadow-lg shadow-purple-500/25">
+            <i class="bi bi-magic text-white"></i>
+            <span class="text-white">Đề xuất bởi AI</span>
+        </button>
+        <div class="flex gap-2 h-10 items-center">
+            @if (canPrev)
+            {
+                <a href="?weekStart=@prevStart.ToString("yyyy-MM-dd")"
+                   class="h-10 px-3 flex items-center rounded-xl glass hover:bg-white/10 text-sm transition">
+                    <i class="bi bi-chevron-left"></i> Tuần trước
+                </a>
+            }
+            @if (canNext)
+            {
+                <a href="?weekStart=@nextStart.ToString("yyyy-MM-dd")"
+                   class="h-10 px-3 flex items-center rounded-xl glass hover:bg-white/10 text-sm transition">
+                    Tuần sau <i class="bi bi-chevron-right"></i>
+                </a>
+            }
+        </div>
+    </div>
+</div>
+
+@if (!Model.HasDeliveryAddress)
+{
+    <div class="mb-6 px-4 py-3 rounded-xl bg-red-500/20 border border-red-500/50 text-red-100 text-sm flex items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill text-red-400"></i>
+        <span>Bạn chưa cập nhật địa chỉ giao hàng. Vui lòng <a href="/Profile/Nutrition" class="underline font-semibold text-red-300 hover:text-red-200">cập nhật tại đây</a> trước khi lưu thực đơn.</span>
+    </div>
+}
+
+@Html.AntiForgeryToken()
+
+<!-- Days -->
+<div class="space-y-6" id="weekDays">
+    @foreach (var (date, meals) in Model.WeekSelections)
+    {
+        var dayName = date.ToString("dddd", new System.Globalization.CultureInfo("vi-VN"));
+        var selectedIds = meals.Select(m => m.Id).ToList();
+        @* Rule: Qua 00:00 ngày giao hàng thì không thể thay đổi món (phải sửa trước 11:59p ngày hôm trước) *@
+        var isPast = date <= today;
+
+        <div class="glass rounded-2xl p-5 @(isPast ? "opacity-80" : "")" id="day-@date.ToString("yyyy-MM-dd")">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h3 class="font-bold capitalize">@dayName</h3>
+                    <p class="text-xs text-gray-500">@date.ToString("dd/MM/yyyy")</p>
+                </div>
+                @if (isPast)
+                {
+                    <span class="px-3 py-1.5 rounded-lg bg-gray-500/30 text-gray-400 text-xs font-medium">
+                        <i class="bi bi-lock me-1"></i> Đã qua thời hạn - không thể chỉnh sửa (trước 00:00 ngày giao)
+                    </span>
+                }
+                else
+                {
+                    <div class="flex items-center gap-2">
+                        @if (meals.Any())
+                        {
+                            <button type="button" onclick="clearDay('@date.ToString("yyyy-MM-dd")')"
+                                    class="px-3 py-1.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 text-xs font-medium transition border border-red-500/30">
+                                <i class="bi bi-trash me-1"></i> Xóa hết món
+                            </button>
+                        }
+                        <button onclick="saveDay('@date.ToString("yyyy-MM-dd")')"
+                                class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition"
+                                id="save-@date.ToString("yyyy-MM-dd")">
+                            <i class="bi bi-check-lg me-1"></i> Lưu
+                        </button>
+                    </div>
+                }
+            </div>
+
+            @if (isPast)
+            {
+                <!-- Past day: read-only display -->
+                <div class="space-y-2">
+                    @if (meals.Any())
+                    {
+                        @foreach (var meal in meals)
+                        {
+                            <div class="flex items-center gap-2 py-2 px-3 rounded-lg bg-white/5">
+                                <span class="text-sm flex-1">@meal.Name</span>
+                                <span class="text-xs text-gray-500">@meal.Calories kcal</span>
+                                <button type="button" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium transition"
+                                        onclick="showMealDetail(@meal.Id)">
+                                    Chi tiết
+                                </button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-gray-500 text-sm italic">Chưa chọn món</p>
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- Future/today: Select dropdowns -->
+                <div class="space-y-3">
+                    @for (int slot = 0; slot < Model.MealsPerDay; slot++)
+                    {
+                        var currentId = selectedIds.Count > slot ? selectedIds[slot] : 0;
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs text-gray-400 w-20 shrink-0">Bữa @(slot + 1)</label>
+                            <select class="select-meal flex-1 max-w-md px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none"
+                                    data-date="@date.ToString("yyyy-MM-dd")" data-slot="@slot"
+                                    name="select-meal-@date.ToString("yyyy-MM-dd")-@slot"
+                                    onchange="toggleDetailBtn(this)">
+                                <option value="">-- Chọn món --</option>
+                                @foreach (var meal in Model.AvailableMeals)
+                                {
+                                    var isSelected = meal.Id == currentId;
+                                    if (isSelected)
+                                    {
+                                        <option value="@meal.Id" selected>@meal.Name (@meal.Calories kcal)@(meal.HasAllergenWarning ? " ⚠️" : "")</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@meal.Id">@meal.Name (@meal.Calories kcal)@(meal.HasAllergenWarning ? " ⚠️" : "")</option>
+                                    }
+                                }
+                            </select>
+                            <button type="button" class="btn-meal-detail shrink-0 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white text-xs font-medium transition"
+                                    data-date="@date.ToString("yyyy-MM-dd")" data-slot="@slot"
+                                    onclick="showMealDetailFromSelect(this)"
+                                    style="@(currentId > 0 ? "" : "display:none")">
+                                Chi tiết
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Modal Chi tiết món ăn -->
+<div id="mealDetailModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: rgba(0,0,0,0.6);">
+    <div class="bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col">
+        <div class="p-5 border-b border-white/10 flex items-center justify-between">
+            <h3 class="text-lg font-bold text-white" id="modalMealName">—</h3>
+            <button type="button" onclick="closeMealDetail()" class="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="p-5 overflow-y-auto flex-1">
+            <div id="modalMealImage" class="mb-4 rounded-xl overflow-hidden bg-white/5 aspect-video flex items-center justify-center">
+                <i class="bi bi-image text-4xl text-gray-500"></i>
+            </div>
+            <p id="modalMealDescription" class="text-gray-300 text-sm mb-4">—</p>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-white/5 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-500">Calories</p>
+                    <p id="modalMealCalories" class="font-semibold text-white">—</p>
+                </div>
+                <div class="bg-white/5 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-500">Protein</p>
+                    <p id="modalMealProtein" class="font-semibold text-white">—</p>
+                </div>
+                <div class="bg-white/5 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-500">Carbs</p>
+                    <p id="modalMealCarbs" class="font-semibold text-white">—</p>
+                </div>
+                <div class="bg-white/5 rounded-lg px-3 py-2">
+                    <p class="text-xs text-gray-500">Fat</p>
+                    <p id="modalMealFat" class="font-semibold text-white">—</p>
+                </div>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 mb-2">Nguyên liệu</p>
+                <p id="modalMealIngredients" class="text-sm text-gray-300">—</p>
+            </div>
+            <div id="modalMealAllergen" class="mt-4 hidden px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs">
+                <i class="bi bi-exclamation-triangle me-1"></i><span>Cảnh báo dị ứng</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const mealsData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.AvailableMeals, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase })) || [];
+
+        (function() {
+            const mealConn = new signalR.HubConnectionBuilder().withUrl('/hubs/meal').withAutomaticReconnect().build();
+
+            function addMealToSelects(meal) {
+                const optText = (meal.name || '') + ' (' + (meal.calories || 0) + ' kcal)' + (meal.hasAllergenWarning ? ' ⚠️' : '');
+                const opt = document.createElement('option');
+                opt.value = meal.id;
+                opt.textContent = optText;
+                document.querySelectorAll('.select-meal').forEach(function(sel) {
+                    const exists = Array.from(sel.options).some(o => parseInt(o.value, 10) === meal.id);
+                    if (!exists) sel.appendChild(opt.cloneNode(true));
+                });
+            }
+
+            function updateMealInSelects(meal) {
+                const optText = (meal.name || '') + ' (' + (meal.calories || 0) + ' kcal)' + (meal.hasAllergenWarning ? ' ⚠️' : '');
+                document.querySelectorAll('.select-meal option[value="' + meal.id + '"]').forEach(function(opt) {
+                    opt.textContent = optText;
+                });
+            }
+
+            mealConn.on('MealDeleted', function(mealId) {
+                if (!mealId) return;
+                const idx = mealsData.findIndex(m => m.id === mealId);
+                if (idx >= 0) mealsData.splice(idx, 1);
+                document.querySelectorAll('.select-meal option[value="' + mealId + '"]').forEach(function(opt) {
+                    opt.remove();
+                });
+                if (typeof showToast === 'function') showToast('🍽️ Món ăn đã bị xóa khỏi danh sách');
+            });
+
+            mealConn.on('MealCreated', function(meal) {
+                if (!meal || !meal.id || !meal.isActive) return;
+                const dto = {
+                    id: meal.id,
+                    name: meal.name,
+                    description: meal.description,
+                    imageUrls: meal.images || [],
+                    calories: meal.calories,
+                    proteinG: meal.protein,
+                    carbsG: meal.carbs,
+                    fatG: meal.fat,
+                    ingredients: meal.ingredients || [],
+                    hasAllergenWarning: false
+                };
+                if (mealsData.every(m => m.id !== meal.id)) {
+                    mealsData.push(dto);
+                    addMealToSelects(dto);
+                    if (typeof showToast === 'function') showToast('🍽️ Có món mới: ' + (meal.name || ''));
+                }
+            });
+
+            mealConn.on('MealUpdated', function(meal) {
+                if (!meal || !meal.id) return;
+                const existing = mealsData.find(m => m.id === meal.id);
+                if (existing) {
+                    existing.name = meal.name;
+                    existing.description = meal.description;
+                    existing.calories = meal.calories;
+                    existing.proteinG = meal.protein;
+                    existing.carbsG = meal.carbs;
+                    existing.fatG = meal.fat;
+                    existing.imageUrls = meal.images || existing.imageUrls;
+                    existing.ingredients = meal.ingredients || existing.ingredients;
+                    if (!meal.isActive) {
+                        mealsData.splice(mealsData.indexOf(existing), 1);
+                        document.querySelectorAll('.select-meal option[value="' + meal.id + '"]').forEach(o => o.remove());
+                        return;
+                    }
+                } else if (meal.isActive) {
+                    mealsData.push({
+                        id: meal.id,
+                        name: meal.name,
+                        description: meal.description,
+                        imageUrls: meal.images || [],
+                        calories: meal.calories,
+                        proteinG: meal.protein,
+                        carbsG: meal.carbs,
+                        fatG: meal.fat,
+                        ingredients: meal.ingredients || [],
+                        hasAllergenWarning: false
+                    });
+                    addMealToSelects(mealsData[mealsData.length - 1]);
+                }
+                updateMealInSelects({ id: meal.id, name: meal.name, calories: meal.calories, hasAllergenWarning: false });
+                if (typeof showToast === 'function') showToast('🍽️ Món ăn đã cập nhật: ' + (meal.name || ''));
+            });
+
+            mealConn.start().catch(console.warn);
+        })();
+
+        function toggleDetailBtn(selectEl) {
+            const row = selectEl.closest('.flex');
+            const btn = row?.querySelector('.btn-meal-detail');
+            if (btn) btn.style.display = selectEl.value && parseInt(selectEl.value) > 0 ? '' : 'none';
+        }
+
+        function showMealDetail(mealId) {
+            const meal = mealsData.find(m => m.id === mealId);
+            if (!meal) return;
+            openMealModal(meal);
+        }
+
+        function showMealDetailFromSelect(btnEl) {
+            const date = btnEl.getAttribute('data-date');
+            const slot = btnEl.getAttribute('data-slot');
+            const select = document.querySelector(`select[data-date="${date}"][data-slot="${slot}"]`);
+            const mealId = select?.value ? parseInt(select.value, 10) : 0;
+            if (mealId > 0) showMealDetail(mealId);
+        }
+
+        function openMealModal(meal) {
+            document.getElementById('modalMealName').textContent = meal.name || '—';
+            document.getElementById('modalMealDescription').textContent = meal.description || 'Chưa có mô tả.';
+            document.getElementById('modalMealCalories').textContent = (meal.calories ?? 0) + ' kcal';
+            document.getElementById('modalMealProtein').textContent = (meal.proteinG ?? 0) + ' g';
+            document.getElementById('modalMealCarbs').textContent = (meal.carbsG ?? 0) + ' g';
+            document.getElementById('modalMealFat').textContent = (meal.fatG ?? 0) + ' g';
+            document.getElementById('modalMealIngredients').textContent = Array.isArray(meal.ingredients) && meal.ingredients.length
+                ? meal.ingredients.join(', ')
+                : 'Chưa có thông tin.';
+
+            const imgEl = document.getElementById('modalMealImage');
+            if (meal.imageUrls && meal.imageUrls.length > 0) {
+                imgEl.innerHTML = `<img src="${meal.imageUrls[0]}" alt="${meal.name}" class="w-full h-full object-cover" />`;
+            } else {
+                imgEl.innerHTML = '<i class="bi bi-image text-4xl text-gray-500"></i>';
+            }
+
+            const allergenEl = document.getElementById('modalMealAllergen');
+            if (meal.hasAllergenWarning && meal.matchedAllergens && meal.matchedAllergens.length > 0) {
+                allergenEl.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Cảnh báo: ' + meal.matchedAllergens.join(', ');
+                allergenEl.classList.remove('hidden');
+            } else {
+                allergenEl.classList.add('hidden');
+            }
+
+            const modal = document.getElementById('mealDetailModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeMealDetail() {
+            const modal = document.getElementById('mealDetailModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.getElementById('mealDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) closeMealDetail();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeMealDetail();
+        });
+
+        document.querySelectorAll('.select-meal').forEach(s => toggleDetailBtn(s));
+
+        async function generateAiForWeek() {
+            const btn = document.getElementById('btn-generate-ai');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span><span> Đang đề xuất...</span>';
+
+            try {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+                const res = await fetch('?handler=GenerateAi', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({
+                        weekStart: '@Model.ViewStart.ToString("yyyy-MM-dd")',
+                        weeklyNotes: document.getElementById('weeklyNotesInput')?.value?.trim() || null
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    showToast('AI đã tạo thực đơn cho các ngày còn trống trong tuần này!');
+                    window.location.reload();
+                } else {
+                    showToast(data.error || 'Không thể tạo thực đơn AI.', 'error');
+                }
+            } catch {
+                showToast('Lỗi kết nối tới dịch vụ AI.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        }
+
+        function getMealIdsForDay(dateStr) {
+            const selects = document.querySelectorAll(`select[data-date="${dateStr}"]`);
+            const mealIds = [];
+            selects.forEach(s => {
+                const v = parseInt(s.value, 10);
+                if (v > 0) mealIds.push(v);
+            });
+            return mealIds;
+        }
+
+        async function clearDay(dateStr) {
+            if (!confirm('Bạn có chắc muốn xóa hết món đã chọn cho ngày này?')) return;
+            try {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+                const res = await fetch('?handler=ClearDay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ date: dateStr })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Đã xóa món cho ngày ' + dateStr);
+                    window.location.reload();
+                } else {
+                    showToast(data.error || 'Không thể xóa.', 'error');
+                }
+            } catch {
+                showToast('Lỗi kết nối.', 'error');
+            }
+        }
+
+        async function saveDay(dateStr) {
+            const hasAddress = @(Model.HasDeliveryAddress ? "true" : "false");
+            if (!hasAddress) {
+                showToast('Vui lòng cập nhật địa chỉ giao hàng trước khi lưu thực đơn.', 'error');
+                return;
+            }
+
+            const mealIds = getMealIdsForDay(dateStr);
+            const btn = document.getElementById(`save-${dateStr}`);
+
+            btn.innerHTML = '<span class="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>';
+            btn.disabled = true;
+
+            try {
+                const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+                const res = await fetch('?handler=SaveDay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({ date: dateStr, mealIds: mealIds, slotId: 1 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Đã lưu';
+                    btn.classList.replace('bg-emerald-500', 'bg-emerald-700');
+                    showToast(`Đã lưu thực đơn ngày ${dateStr}`);
+                } else {
+                    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Lỗi';
+                    showToast(data.error || 'Có lỗi xảy ra.', 'error');
+                }
+            } catch {
+                btn.innerHTML = '<i class="bi bi-x-circle me-1"></i> Lỗi';
+                showToast('Lỗi kết nối.', 'error');
+            }
+
+            setTimeout(() => {
+                btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Lưu';
+                btn.disabled = false;
+                btn.classList.replace('bg-emerald-700', 'bg-emerald-500');
+            }, 3000);
+        }
+    </script>
+}

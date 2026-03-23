@@ -1,0 +1,85 @@
+@page
+@model MealPrep.Web.Pages.Admin.KitchenExportModel
+@{
+    ViewData["Title"] = "Kitchen Export";
+    Layout = "_AdminLayout";
+}
+
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">
+            <i class="bi bi-clipboard-data me-2 text-emerald-500"></i>Danh Sách Món Cần Nấu
+        </h1>
+    </div>
+
+    <!-- Date Filter + Download -->
+    <div class="glass rounded-2xl p-4 flex flex-wrap items-center gap-4">
+        <form method="get" class="flex items-center gap-3">
+            <label class="text-sm text-gray-600">Ngày:</label>
+            <input type="date" name="date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")"
+                   class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm" />
+            <button type="submit" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition">
+                Xem
+            </button>
+        </form>
+        @if (Model.KitchenList.Any())
+        {
+            <a href="/Admin/KitchenExport?handler=DownloadCsv&date=@Model.SelectedDate.ToString("yyyy-MM-dd")"
+               class="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition flex items-center gap-1">
+                <i class="bi bi-download"></i>Tải CSV
+            </a>
+        }
+    </div>
+
+    @if (!Model.KitchenList.Any())
+    {
+        <div class="glass rounded-2xl p-12 text-center">
+            <i class="bi bi-inbox text-5xl text-gray-300"></i>
+            <p class="mt-4 text-gray-500">Không có món nào cần nấu cho ngày @Model.SelectedDate.ToString("dd/MM/yyyy")</p>
+        </div>
+    }
+    else
+    {
+        <div class="glass rounded-2xl overflow-hidden">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="bg-slate-50 text-gray-500 text-left">
+                        <th class="px-6 py-3 font-medium">#</th>
+                        <th class="px-6 py-3 font-medium">Món Ăn</th>
+                        <th class="px-6 py-3 font-medium text-center">Số Lượng</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @{ var idx = 0; }
+                    @foreach (var item in Model.KitchenList)
+                    {
+                        idx++;
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="px-6 py-4 text-gray-400">@idx</td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    @if (item.ImageUrls.Length > 0)
+                                    {
+                                        <img src="@item.ImageUrls[0]" class="w-10 h-10 rounded-lg object-cover" alt="" />
+                                    }
+                                    <span class="font-medium text-gray-900">@item.MealName</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-lg">
+                                    @item.TotalQuantity
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="bg-slate-50">
+                        <td colspan="2" class="px-6 py-3 text-right font-semibold text-gray-700">Tổng cộng:</td>
+                        <td class="px-6 py-3 text-center font-bold text-lg text-emerald-600">@Model.KitchenList.Sum(i => i.TotalQuantity)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>

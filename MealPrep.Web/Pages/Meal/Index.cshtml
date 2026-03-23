@@ -1,0 +1,183 @@
+@page
+@model MealPrep.Web.Pages.Meal.IndexModel
+@using MealPrep.BLL.Services
+@{
+    Layout = "_DarkLayout";
+    ViewData["Title"] = "Danh Sách Món Ăn";
+}
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold">🍽️ Danh Sách Món Ăn</h1>
+        <p class="text-gray-400 mt-1">Khám phá các món ăn lành mạnh và ngon miệng.</p>
+    </div>
+</div>
+
+<!-- Search -->
+<form method="get" class="glass rounded-2xl p-4 mb-6">
+    <div class="flex flex-wrap gap-3 items-end">
+        <div class="flex-1 min-w-[200px]">
+            <label class="block text-xs font-semibold text-gray-400 mb-1">Tìm kiếm</label>
+            <input name="Q" value="@Model.Q" placeholder="Nhập tên món ăn..."
+                   class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-500 focus:border-emerald-500 focus:outline-none transition" />
+        </div>
+        <button type="submit" class="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition">
+            <i class="bi bi-search me-1"></i> Tìm
+        </button>
+        <a href="/Meal" class="px-5 py-2.5 border border-white/10 text-gray-400 hover:text-white text-sm rounded-xl transition">
+            Đặt lại
+        </a>
+    </div>
+</form>
+
+<!-- Meal Grid -->
+@if (Model.Result?.Items?.Any() == true)
+{
+    <div id="mealGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        @foreach (var meal in Model.Result.Items)
+        {
+            <a href="/Meal/Detail?id=@meal.Id" class="glass rounded-2xl overflow-hidden hover:border-emerald-500/30 transition group" data-meal-id="@meal.Id">
+                @if (!string.IsNullOrEmpty(meal.ThumbnailUrl))
+                {
+                    <div class="h-44 overflow-hidden">
+                        <img src="@meal.ThumbnailUrl" alt="@meal.Name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                    </div>
+                }
+                else if (meal.Images?.Length > 0)
+                {
+                    <div class="h-44 overflow-hidden">
+                        <img src="@meal.Images[0]" alt="@meal.Name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                    </div>
+                }
+                else
+                {
+                    <div class="h-44 bg-white/5 flex items-center justify-center text-5xl">🍽️</div>
+                }
+                <div class="p-5">
+                    <h3 class="font-bold text-base mb-2 group-hover:text-emerald-400 transition">@meal.Name</h3>
+                    @if (!string.IsNullOrEmpty(meal.Description))
+                    {
+                        <p class="text-xs text-gray-400 line-clamp-2 mb-3">@meal.Description</p>
+                    }
+                    <div class="flex items-center gap-3 text-xs text-gray-500">
+                        <span class="flex items-center gap-1"><i class="bi bi-fire text-orange-400"></i> @meal.Calories kcal</span>
+                        <span>P: @(meal.Protein)g</span>
+                        <span>C: @(meal.Carbs)g</span>
+                        <span>F: @(meal.Fat)g</span>
+                    </div>
+                    <div class="mt-2 flex items-center gap-1 text-yellow-400 text-xs meal-rating-row" data-meal-id="@meal.Id" style="@(meal.AvgRating.HasValue && meal.AvgRating.Value > 0 ? "" : "display:none")">
+                        <i class="bi bi-star-fill"></i>
+                        <span class="font-semibold meal-avg-value">@(meal.AvgRating?.ToString("0.0") ?? "0")</span>
+                    </div>
+                </div>
+            </a>
+        }
+    </div>
+
+    <!-- Pagination -->
+    @if (Model.Result.TotalPages > 1)
+    {
+        <div class="flex items-center justify-center gap-1 mt-6">
+            @for (int i = 1; i <= Model.Result.TotalPages; i++)
+            {
+                <a href="?PageIndex=@i&Q=@Model.Q"
+                   class="w-8 h-8 flex items-center justify-center text-xs rounded-lg transition
+                   @(i == Model.Result.Page ? "bg-emerald-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10")">
+                    @i
+                </a>
+            }
+        </div>
+    }
+}
+else
+{
+    <div class="glass rounded-2xl p-12 text-center">
+        <div class="text-5xl mb-4">🔍</div>
+        <h3 class="text-lg font-bold mb-2">Không tìm thấy</h3>
+        <p class="text-gray-400 text-sm">Không có món ăn nào phù hợp với tìm kiếm của bạn.</p>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        (function() {
+            const mealConn = new signalR.HubConnectionBuilder().withUrl('/hubs/meal').withAutomaticReconnect().build();
+
+            function buildMealCard(meal) {
+                const imgSrc = meal.thumbnailUrl || (meal.images && meal.images[0]) || '';
+                const imgHtml = imgSrc
+                    ? `<div class="h-44 overflow-hidden"><img src="${imgSrc}" alt="${(meal.name||'').replace(/"/g,'&quot;')}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" /></div>`
+                    : `<div class="h-44 bg-white/5 flex items-center justify-center text-5xl">🍽️</div>`;
+                const desc = (meal.description || '').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+                const ratingHtml = (meal.avgRating != null && meal.avgRating > 0)
+                    ? `<div class="mt-2 flex items-center gap-1 text-yellow-400 text-xs meal-rating-row" data-meal-id="${meal.id}"><i class="bi bi-star-fill"></i><span class="font-semibold meal-avg-value">${meal.avgRating.toFixed(1)}</span></div>`
+                    : `<div class="mt-2 flex items-center gap-1 text-yellow-400 text-xs meal-rating-row" data-meal-id="${meal.id}" style="display:none"><i class="bi bi-star-fill"></i><span class="font-semibold meal-avg-value">0</span></div>`;
+                return `<a href="/Meal/Detail?id=${meal.id}" class="glass rounded-2xl overflow-hidden hover:border-emerald-500/30 transition group" data-meal-id="${meal.id}">${imgHtml}<div class="p-5"><h3 class="font-bold text-base mb-2 group-hover:text-emerald-400 transition">${(meal.name||'').replace(/</g,'&lt;')}</h3>${desc ? '<p class="text-xs text-gray-400 line-clamp-2 mb-3">'+desc+'</p>' : ''}<div class="flex items-center gap-3 text-xs text-gray-500"><span class="flex items-center gap-1"><i class="bi bi-fire text-orange-400"></i> ${meal.calories||0} kcal</span><span>P: ${meal.protein||0}g</span><span>C: ${meal.carbs||0}g</span><span>F: ${meal.fat||0}g</span></div>${ratingHtml}</div></a>`;
+            }
+
+            mealConn.on('ReceiveNewRating', function(data) {
+                if (!data || !data.mealId) return;
+                const row = document.querySelector('.meal-rating-row[data-meal-id="' + data.mealId + '"]');
+                if (row) {
+                    row.style.display = '';
+                    const val = row.querySelector('.meal-avg-value');
+                    if (val) val.textContent = (data.newAvgRating ?? 0).toFixed(1);
+                }
+            });
+
+            mealConn.on('MealCreated', function(meal) {
+                if (!meal || !meal.id) return;
+                const grid = document.getElementById('mealGrid');
+                if (grid) {
+                    const card = document.createRange().createContextualFragment(buildMealCard(meal));
+                    grid.insertBefore(card.firstElementChild, grid.firstChild);
+                    if (typeof showToast === 'function') showToast('🍽️ Có món ăn mới: ' + (meal.name || ''));
+                } else {
+                    window.location.reload();
+                }
+            });
+
+            mealConn.on('MealDeleted', function(mealId) {
+                if (!mealId) return;
+                const card = document.querySelector('[data-meal-id="' + mealId + '"]');
+                if (card && card.tagName === 'A') {
+                    card.remove();
+                    if (typeof showToast === 'function') showToast('🍽️ Món ăn đã bị xóa khỏi danh sách');
+                }
+            });
+
+            mealConn.on('MealUpdated', function(meal) {
+                if (!meal || !meal.id) return;
+                const card = document.querySelector('[data-meal-id="' + meal.id + '"]');
+                if (card && card.tagName === 'A') {
+                    const imgDiv = card.querySelector('.h-44');
+                    const imgSrc = meal.thumbnailUrl || (meal.images && meal.images[0]);
+                    if (imgDiv) {
+                        if (imgSrc) {
+                            const img = imgDiv.querySelector('img');
+                            if (img) img.src = imgSrc; else imgDiv.innerHTML = '<img src="'+imgSrc+'" alt="" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />';
+                        } else imgDiv.innerHTML = '<div class="h-44 bg-white/5 flex items-center justify-center text-5xl">🍽️</div>';
+                    }
+                    const h3 = card.querySelector('h3');
+                    if (h3) h3.textContent = meal.name || '';
+                    const p = card.querySelector('.text-xs.text-gray-400');
+                    if (p) p.textContent = (meal.description || '').substring(0, 100);
+                    const nums = card.querySelectorAll('.flex.items-center.gap-3 span');
+                    if (nums.length >= 4) {
+                        nums[0].innerHTML = '<span class="flex items-center gap-1"><i class="bi bi-fire text-orange-400"></i> ' + (meal.calories||0) + ' kcal</span>';
+                        nums[1].textContent = 'P: ' + (meal.protein||0) + 'g';
+                        nums[2].textContent = 'C: ' + (meal.carbs||0) + 'g';
+                        nums[3].textContent = 'F: ' + (meal.fat||0) + 'g';
+                    }
+                    const avgEl = card.querySelector('.meal-avg-value');
+                    if (avgEl && meal.avgRating != null) avgEl.textContent = meal.avgRating.toFixed(1);
+                    const ratingRow = card.querySelector('.meal-rating-row');
+                    if (ratingRow) ratingRow.style.display = (meal.avgRating != null && meal.avgRating > 0) ? '' : 'none';
+                    if (typeof showToast === 'function') showToast('🍽️ Món ăn đã được cập nhật: ' + (meal.name || ''));
+                }
+            });
+
+            mealConn.start().catch(console.warn);
+        })();
+    </script>
+}

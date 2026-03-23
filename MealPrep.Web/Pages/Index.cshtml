@@ -1,0 +1,156 @@
+@page "/home"
+@model MealPrep.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "MealPrep - Giao Món Ăn Dinh Dưỡng";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MealPrep — Giao Món Ăn Dinh Dưỡng</title>
+    <meta name="description" content="MealPrep - Dịch vụ đặt món ăn dinh dưỡng hàng ngày. Tùy chỉnh thực đơn theo mục tiêu sức khỏe của bạn." />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-white">
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 w-full bg-white/80 backdrop-blur-lg z-50 border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
+                    <i class="bi bi-leaf text-white text-sm"></i>
+                </div>
+                <span class="text-xl font-bold text-gray-900">MealPrep</span>
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/Auth/Login" class="text-sm font-medium text-gray-600 hover:text-emerald-600 transition">Đăng Nhập</a>
+                <a href="/Auth/Register" class="px-5 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition shadow-lg shadow-emerald-200">
+                    Đăng Ký
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="pt-32 pb-20 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-emerald-50"></div>
+        <div class="max-w-7xl mx-auto px-6 relative">
+            <div class="max-w-3xl mx-auto text-center">
+                <div class="inline-block px-4 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium mb-6">
+                    🥗 Dịch vụ meal prep hàng đầu
+                </div>
+                <h1 class="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mb-6">
+                    Bữa ăn dinh dưỡng
+                    <span class="bg-gradient-to-r from-emerald-500 to-teal-600 bg-clip-text text-transparent">giao tận nhà</span>
+                </h1>
+                <p class="text-xl text-gray-500 mb-10 max-w-2xl mx-auto">
+                    Tùy chỉnh thực đơn theo mục tiêu sức khỏe. AI gợi ý món ăn phù hợp.
+                    Giao hàng mỗi ngày — chỉ cần hâm nóng & thưởng thức.
+                </p>
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <a href="/Auth/Register" class="px-8 py-3.5 bg-emerald-600 text-white text-base font-semibold rounded-2xl hover:bg-emerald-700 transition shadow-xl shadow-emerald-200 flex items-center gap-2">
+                        <i class="bi bi-rocket-takeoff"></i>Bắt Đầu Ngay
+                    </a>
+                    <a href="#features" class="px-8 py-3.5 text-gray-700 text-base font-medium rounded-2xl border border-gray-200 hover:bg-gray-50 transition">
+                        Tìm Hiểu Thêm <i class="bi bi-arrow-down ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-20 bg-slate-50">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-gray-900 mb-4">Tại sao chọn MealPrep?</h2>
+                <p class="text-gray-500 max-w-xl mx-auto">Giải pháp dinh dưỡng toàn diện cho người bận rộn</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-md transition">
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-5">
+                        <i class="bi bi-robot text-2xl text-emerald-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">AI Gợi Ý Thực Đơn</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed">Trí tuệ nhân tạo phân tích khẩu vị và mục tiêu dinh dưỡng để tạo thực đơn cá nhân hóa.</p>
+                </div>
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-md transition">
+                    <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mb-5">
+                        <i class="bi bi-heart-pulse text-2xl text-blue-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Theo Dõi Dinh Dưỡng</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed">Nhật ký dinh dưỡng chi tiết: calo, protein, carbs, chất béo — tất cả được tính tự động.</p>
+                </div>
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 hover:shadow-md transition">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mb-5">
+                        <i class="bi bi-truck text-2xl text-amber-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2">Giao Hàng Mỗi Ngày</h3>
+                    <p class="text-gray-500 text-sm leading-relaxed">Chọn khung giờ giao phù hợp. Ảnh bằng chứng giao hàng. Theo dõi đơn real-time.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How it Works -->
+    <section class="py-20">
+        <div class="max-w-7xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold text-gray-900 mb-4">Quy Trình Đơn Giản</h2>
+            </div>
+            <div class="grid md:grid-cols-4 gap-6">
+                @{
+                    var steps = new[] {
+                        ("bi-person-plus", "1. Đăng Ký", "Tạo tài khoản và thiết lập hồ sơ dinh dưỡng."),
+                        ("bi-bookmark-star", "2. Chọn Gói", "Chọn gói phù hợp và thanh toán qua MoMo."),
+                        ("bi-list-check", "3. Chọn Thực Đơn", "AI gợi ý hoặc tự chọn món cho từng ngày."),
+                        ("bi-box-seam", "4. Nhận Hàng", "Bữa ăn được giao tận nhà mỗi ngày."),
+                    };
+                }
+                @foreach (var (icon, title, desc) in steps)
+                {
+                    <div class="text-center">
+                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-200">
+                            <i class="bi @icon text-2xl text-white"></i>
+                        </div>
+                        <h3 class="text-base font-bold text-gray-900 mb-2">@title</h3>
+                        <p class="text-sm text-gray-500">@desc</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="py-20 bg-gradient-to-br from-emerald-600 to-teal-700">
+        <div class="max-w-3xl mx-auto px-6 text-center">
+            <h2 class="text-3xl font-bold text-white mb-4">Sẵn sàng bắt đầu?</h2>
+            <p class="text-emerald-100 text-lg mb-8">Đăng ký ngay hôm nay và trải nghiệm bữa ăn dinh dưỡng chất lượng.</p>
+            <a href="/Auth/Register" class="inline-block px-10 py-4 bg-white text-emerald-700 font-bold rounded-2xl hover:bg-emerald-50 transition shadow-xl text-lg">
+                Đăng Ký Miễn Phí <i class="bi bi-arrow-right ms-2"></i>
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 bg-gray-900 text-gray-400">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
+                    <i class="bi bi-leaf text-white text-xs"></i>
+                </div>
+                <span class="text-sm font-semibold text-white">MealPrep</span>
+            </div>
+            <p class="text-sm">© @DateTime.Now.Year MealPrep. All rights reserved.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
