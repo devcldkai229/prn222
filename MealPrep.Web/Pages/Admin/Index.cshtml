@@ -1,271 +1,553 @@
-@page
+﻿@page
 @model MealPrep.Web.Pages.Admin.IndexModel
-@using MealPrep.BLL.Services
 @{
     Layout = "_AdminLayout";
     ViewData["Title"] = "Admin Dashboard";
+
     var d = Model.Dashboard;
-    var revChange = d.YesterdaysRevenue > 0
-        ? ((d.TodaysRevenue - d.YesterdaysRevenue) / d.YesterdaysRevenue * 100)
+    var mode = (Model.Mode ?? "overview").Trim().ToLowerInvariant();
+    var showOperations = mode is "overview" or "operations";
+    var showStrategic = mode is "overview" or "strategic";
+
+    var revenueDelta = d.YesterdaysRevenue > 0
+        ? ((d.TodaysRevenue - d.YesterdaysRevenue) / d.YesterdaysRevenue * 100m)
         : 0m;
+
+    string ModeClass(string key)
+        => mode == key
+            ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20 border border-emerald-700"
+            : "bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200";
+
+    string FormatMetric(decimal value, string format)
+        => format switch
+        {
+            "currency" => value.ToString("N0") + " VND",
+            "percent" => value.ToString("0.0") + "%",
+            _ => value.ToString("N0"),
+        };
 }
 
-<h1 class="text-2xl font-bold mb-6">📊 Tổng Quan</h1>
-
-<!-- KPI Cards -->
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <!-- Today Revenue -->
-    <div class="glass rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-gray-400 text-sm">Doanh thu hôm nay</span>
-            <span class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                <i class="bi bi-cash-stack"></i>
-            </span>
-        </div>
-        <p class="text-2xl font-bold">@d.TodaysRevenue.ToString("N0")₫</p>
-        @if (revChange != 0)
-        {
-            <p class="text-xs mt-1 @(revChange >= 0 ? "text-emerald-400" : "text-red-400")">
-                <i class="bi bi-arrow-@(revChange >= 0 ? "up" : "down")"></i>
-                @Math.Abs(revChange).ToString("0.0")% so với hôm qua
-            </p>
+@section Styles {
+    <style>
+        .dash-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
         }
-    </div>
 
-    <!-- Active Subscribers -->
-    <div class="glass rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-gray-400 text-sm">Đăng ký hoạt động</span>
-            <span class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                <i class="bi bi-people-fill"></i>
-            </span>
-        </div>
-        <p class="text-2xl font-bold">@d.ActiveSubscriberCount</p>
-    </div>
+        .hero-band {
+            background:
+                radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.18), transparent 34%),
+                radial-gradient(circle at 85% 25%, rgba(59, 130, 246, 0.17), transparent 32%),
+                linear-gradient(135deg, #f0fdf4, #eff6ff 60%, #f8fafc);
+            border: 1px solid #dbeafe;
+        }
 
-    <!-- Tomorrow Orders -->
-    <div class="glass rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-gray-400 text-sm">Đơn hàng ngày mai</span>
-            <span class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-                <i class="bi bi-box-seam-fill"></i>
-            </span>
-        </div>
-        <p class="text-2xl font-bold">@d.TomorrowOrderCount</p>
-    </div>
+        .metric-label {
+            color: #64748b;
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            font-weight: 700;
+        }
 
-    <!-- Kitchen Prep -->
-    <div class="glass rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-gray-400 text-sm">Phần ăn cần chuẩn bị</span>
-            <span class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
-                <i class="bi bi-fire"></i>
-            </span>
-        </div>
-        <p class="text-2xl font-bold">@d.KitchenPrepMealCount</p>
-    </div>
-</div>
+        .metric-value {
+            color: #0f172a;
+            font-size: 1.5rem;
+            line-height: 1.2;
+            font-weight: 800;
+        }
 
-<!-- Charts row -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <!-- Revenue Chart -->
-    <div class="glass rounded-2xl p-6">
-        <h3 class="font-bold mb-4">Doanh Thu 30 Ngày</h3>
-        <canvas id="revenueChart" height="200"></canvas>
-    </div>
-    <!-- Order Status -->
-    <div class="glass rounded-2xl p-6">
-        <h3 class="font-bold mb-4">Phân Bố Trạng Thái Đơn Hàng</h3>
-        <canvas id="orderStatusChart" height="200"></canvas>
-    </div>
-</div>
+        .slot-bar {
+            height: 8px;
+            border-radius: 9999px;
+            background: #e2e8f0;
+            overflow: hidden;
+        }
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <!-- User Goals -->
-    <div class="glass rounded-2xl p-6">
-        <h3 class="font-bold mb-4">Mục Tiêu Người Dùng</h3>
-        <canvas id="goalChart" height="200"></canvas>
-    </div>
+        .slot-bar > span {
+            display: block;
+            height: 100%;
+            background: linear-gradient(90deg, #14b8a6, #f59e0b);
+        }
+    </style>
+}
 
-    <!-- Top Disliked Meals -->
-    <div class="glass rounded-2xl p-6">
-        <h3 class="font-bold mb-4">Món Ăn Bị Ghét Nhiều Nhất</h3>
-        @if (d.TopDislikedMeals.Any())
-        {
-            <div class="space-y-3">
-                @foreach (var meal in d.TopDislikedMeals)
+<div class="space-y-6">
+    <section class="hero-band rounded-3xl px-6 py-5 lg:px-8 lg:py-6">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+                <p class="text-xs font-semibold tracking-[.15em] text-emerald-700 uppercase">Operations Intelligence</p>
+                <h1 class="text-2xl lg:text-3xl font-extrabold text-slate-900 mt-1">Admin Dashboard</h1>
+                <p class="text-sm text-slate-600 mt-2">Giảm nhiễu thông tin bằng cách chuyển chế độ xem theo nhu cầu vận hành hoặc chiến lược.</p>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <div class="flex items-center gap-2 rounded-2xl bg-white/90 p-2 border border-white">
+                    <a href="?mode=overview&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("overview")">Toàn cảnh</a>
+                    <a href="?mode=operations&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("operations")">Vận hành</a>
+                    <a href="?mode=strategic&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("strategic")">Chiến lược</a>
+                </div>
+
+                @if (showOperations)
                 {
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03]">
-                        <span class="text-sm">@meal.Name</span>
-                        <span class="text-xs text-red-400 font-semibold">@meal.DislikedCount lượt</span>
+                    <div class="flex items-center gap-2 rounded-2xl bg-white/90 p-2 border border-white justify-end">
+                        <span class="text-xs font-semibold text-slate-500 px-2">Khung thời gian</span>
+                        <a href="?mode=@mode&days=7" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 7 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">7 ngày</a>
+                        <a href="?mode=@mode&days=30" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 30 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">30 ngày</a>
+                        <a href="?mode=@mode&days=90" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 90 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">90 ngày</a>
                     </div>
                 }
             </div>
-        }
-        else
-        {
-            <p class="text-gray-500 text-sm">Chưa có dữ liệu.</p>
-        }
-    </div>
-</div>
-
-<!-- Recent Failed Payments -->
-<div class="glass rounded-2xl p-6 mb-8">
-    <h3 class="font-bold mb-4">Biểu Đồ Đăng Ký Mới & Gói Dịch Vụ</h3>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-            <p class="text-sm text-gray-400 mb-3">Đăng Ký Mới 7 Ngày Gần Đây</p>
-            <canvas id="newSubsChart" height="200"></canvas>
         </div>
-        <div>
-            <p class="text-sm text-gray-400 mb-3">Phân Bố Gói Dịch Vụ (Đang Hoạt Động)</p>
-            <canvas id="planDistChart" height="200"></canvas>
-        </div>
-    </div>
-</div>
+    </section>
 
-<!-- Recent Failed Payments -->
-<div class="glass rounded-2xl p-6">
-    <h3 class="font-bold mb-4">Thanh Toán Thất Bại Gần Đây</h3>
-    @if (d.RecentFailedPayments.Any())
+    <section class="dash-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-bold text-slate-900">Cảnh báo ưu tiên</h2>
+            <span class="text-xs text-slate-500">Exception-first</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            @foreach (var alert in d.Alerts)
+            {
+                var tone = alert.Severity == "critical"
+                    ? "bg-red-50 border-red-200 text-red-800"
+                    : alert.Severity == "warning"
+                        ? "bg-amber-50 border-amber-200 text-amber-800"
+                        : "bg-blue-50 border-blue-200 text-blue-800";
+
+                <div class="rounded-xl border p-3 @tone">
+                    <p class="font-semibold">@alert.Title</p>
+                    <p class="text-sm opacity-90">@alert.Detail</p>
+                </div>
+            }
+        </div>
+    </section>
+
+    @if (showOperations)
     {
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="text-gray-500 text-xs uppercase border-b border-white/10">
-                        <th class="text-left py-3 px-2">ID</th>
-                        <th class="text-left py-3 px-2">Khách Hàng</th>
-                        <th class="text-right py-3 px-2">Số Tiền</th>
-                        <th class="text-left py-3 px-2">Phương Thức</th>
-                        <th class="text-left py-3 px-2">Thời Gian</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var pay in d.RecentFailedPayments)
-                    {
-                        <tr class="border-b border-white/5 hover:bg-white/[0.02]">
-                            <td class="py-3 px-2 text-gray-400">#@pay.PaymentId</td>
-                            <td class="py-3 px-2">@pay.CustomerName</td>
-                            <td class="py-3 px-2 text-right text-red-400">@pay.Amount.ToString("N0")₫</td>
-                            <td class="py-3 px-2 text-gray-400">@pay.Method</td>
-                            <td class="py-3 px-2 text-gray-500">@pay.CreatedAt.ToString("dd/MM HH:mm")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+        <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <article class="dash-card rounded-2xl p-4">
+                <p class="metric-label">Doanh thu hôm nay</p>
+                <p class="metric-value mt-1">@d.TodaysRevenue.ToString("N0") VND</p>
+                <p class="text-xs mt-2 @(revenueDelta >= 0 ? "text-emerald-600" : "text-red-600")">
+                    <i class="bi bi-arrow-@(revenueDelta >= 0 ? "up" : "down")"></i>
+                    @Math.Abs(revenueDelta).ToString("0.0")% so với hôm qua
+                </p>
+            </article>
+
+            <article class="dash-card rounded-2xl p-4">
+                <p class="metric-label">Doanh thu @d.SelectedDays ngày</p>
+                <p class="metric-value mt-1">@d.RevenueInRange.ToString("N0") VND</p>
+                <p class="text-xs text-slate-500 mt-2">Nguồn từ thanh toán Paid</p>
+            </article>
+
+            <article class="dash-card rounded-2xl p-4">
+                <p class="metric-label">Đơn hàng @d.SelectedDays ngày</p>
+                <p class="metric-value mt-1">@d.TotalOrdersInRange</p>
+                <p class="text-xs text-slate-500 mt-2">Hoàn tất: @d.DeliveredOrdersInRange | Hủy: @d.CancelledOrdersInRange</p>
+            </article>
+
+            <article class="dash-card rounded-2xl p-4">
+                <p class="metric-label">Tỉ lệ hoàn tất / thanh toán</p>
+                <p class="metric-value mt-1">@d.OrderCompletionRate.ToString("0.0")% / @d.PaymentSuccessRate.ToString("0.0")%</p>
+                <p class="text-xs text-slate-500 mt-2">Hiệu suất vận hành trong kỳ</p>
+            </article>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Doanh thu @d.SelectedDays ngày gần nhất</h3>
+                <canvas id="revenueChart" height="160"></canvas>
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Phân bố trạng thái đơn</h3>
+                <canvas id="orderStatusChart" height="160"></canvas>
+            </article>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <article class="dash-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-bold text-slate-900">Top món bán chạy</h3>
+                    <span class="text-xs text-slate-500">Theo số lượng</span>
+                </div>
+                @if (d.TopSellingMeals.Any())
+                {
+                    <div class="space-y-2">
+                        @foreach (var meal in d.TopSellingMeals)
+                        {
+                            <div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                                <p class="text-sm text-slate-700">@meal.Name</p>
+                                <p class="text-sm font-bold text-emerald-700">@meal.Quantity</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-sm text-slate-500">Chưa có dữ liệu.</p>
+                }
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-bold text-slate-900">Món bị đánh giá thấp</h3>
+                    <span class="text-xs text-slate-500">>= 2 đánh giá</span>
+                </div>
+                @if (d.LowRatedMeals.Any())
+                {
+                    <div class="space-y-2">
+                        @foreach (var meal in d.LowRatedMeals)
+                        {
+                            <div class="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm text-slate-700">@meal.Name</p>
+                                    <p class="text-sm font-bold text-amber-700">@meal.AvgStars.ToString("0.0")*</p>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1">@meal.RatingCount luot danh gia</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-sm text-slate-500">Chưa có dữ liệu.</p>
+                }
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-base font-bold text-slate-900">Tải slot giao ngày mai</h3>
+                    <span class="text-xs text-slate-500">Used / Capacity</span>
+                </div>
+                @if (d.DeliverySlotLoadsTomorrow.Any())
+                {
+                    <div class="space-y-3">
+                        @foreach (var slot in d.DeliverySlotLoadsTomorrow)
+                        {
+                            var ratio = slot.Capacity > 0 ? Math.Min(100m, (decimal)slot.Used * 100m / slot.Capacity) : 0m;
+                            <div>
+                                <div class="flex items-center justify-between text-sm mb-1">
+                                    <p class="font-semibold text-slate-700">@slot.SlotName</p>
+                                    <p class="text-slate-500">@slot.Used/@slot.Capacity (@ratio.ToString("0.#")%)</p>
+                                </div>
+                                <div class="slot-bar">
+                                    <span style="width: @ratio.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)%"></span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-sm text-slate-500">Chưa có dữ liệu.</p>
+                }
+            </article>
+        </section>
     }
-    else
+
+    @if (showStrategic)
     {
-        <p class="text-gray-500 text-sm">Không có thanh toán thất bại.</p>
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <article class="dash-card rounded-2xl p-5">
+                <p class="metric-label">So sánh quý</p>
+                <p class="metric-value mt-1">@d.CurrentQuarterRevenue.ToString("N0") VND</p>
+                <p class="text-xs text-slate-500 mt-1">Quý trước: @d.PreviousQuarterRevenue.ToString("N0") VND</p>
+                <p class="text-sm mt-3 @((d.QuarterOverQuarterChangePercent >= 0m) ? "text-emerald-600" : "text-red-600") font-semibold">
+                    <i class="bi bi-arrow-@((d.QuarterOverQuarterChangePercent >= 0m) ? "up" : "down")"></i>
+                    @Math.Abs(d.QuarterOverQuarterChangePercent).ToString("0.0")% QoQ
+                </p>
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <p class="metric-label">So sánh năm</p>
+                <p class="metric-value mt-1">@d.CurrentYearRevenue.ToString("N0") VND</p>
+                <p class="text-xs text-slate-500 mt-1">Năm trước: @d.PreviousYearRevenue.ToString("N0") VND</p>
+                <p class="text-sm mt-3 @((d.YearOverYearChangePercent >= 0m) ? "text-emerald-600" : "text-red-600") font-semibold">
+                    <i class="bi bi-arrow-@((d.YearOverYearChangePercent >= 0m) ? "up" : "down")"></i>
+                    @Math.Abs(d.YearOverYearChangePercent).ToString("0.0")% YoY
+                </p>
+            </article>
+        </section>
+
+        <section class="dash-card rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold text-slate-900">Ma trận so sánh đa chỉ số QoQ / YoY</h3>
+                <span class="text-xs text-slate-500">Không chỉ doanh thu</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[920px] text-sm">
+                    <thead>
+                        <tr class="text-left border-b border-slate-200 text-slate-500 uppercase text-xs">
+                            <th class="py-2 pr-2">Chỉ số</th>
+                            <th class="py-2 px-2 text-right">Q hiện tại</th>
+                            <th class="py-2 px-2 text-right">Q trước</th>
+                            <th class="py-2 px-2 text-right">QoQ</th>
+                            <th class="py-2 px-2 text-right">Năm hiện tại</th>
+                            <th class="py-2 px-2 text-right">Năm trước</th>
+                            <th class="py-2 pl-2 text-right">YoY</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in d.StrategicMetrics)
+                        {
+                            var rowQoqUp = row.QuarterOverQuarterChangePercent.GetValueOrDefault() >= 0m;
+                            var rowYoyUp = row.YearOverYearChangePercent.GetValueOrDefault() >= 0m;
+                            <tr class="border-b border-slate-100">
+                                <td class="py-2 pr-2 text-slate-700 font-medium">@row.Metric</td>
+                                <td class="py-2 px-2 text-right text-slate-700">@FormatMetric(row.CurrentQuarter, row.Format)</td>
+                                <td class="py-2 px-2 text-right text-slate-700">@FormatMetric(row.PreviousQuarter, row.Format)</td>
+                                <td class="py-2 px-2 text-right @(rowQoqUp ? "text-emerald-600" : "text-red-600")">
+                                    @(row.QuarterOverQuarterChangePercent.HasValue ? row.QuarterOverQuarterChangePercent.Value.ToString("+0.0;-0.0") + "%" : "-")
+                                </td>
+                                <td class="py-2 px-2 text-right text-slate-700">@FormatMetric(row.CurrentYear, row.Format)</td>
+                                <td class="py-2 px-2 text-right text-slate-700">@FormatMetric(row.PreviousYear, row.Format)</td>
+                                <td class="py-2 pl-2 text-right @(rowYoyUp ? "text-emerald-600" : "text-red-600")">
+                                    @(row.YearOverYearChangePercent.HasValue ? row.YearOverYearChangePercent.Value.ToString("+0.0;-0.0") + "%" : "-")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Doanh thu theo quý</h3>
+                <canvas id="quarterlyRevenueChart" height="160"></canvas>
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Doanh thu theo năm</h3>
+                <canvas id="yearlyRevenueChart" height="160"></canvas>
+            </article>
+        </section>
+    }
+
+    @if (showOperations)
+    {
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Đăng ký mới 7 ngày & phân bố gói</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div>
+                        <p class="text-sm text-slate-500 mb-2">Đăng ký mới</p>
+                        <canvas id="newSubsChart" height="160"></canvas>
+                    </div>
+                    <div>
+                        <p class="text-sm text-slate-500 mb-2">Gói đang hoạt động</p>
+                        <canvas id="planDistChart" height="160"></canvas>
+                    </div>
+                </div>
+            </article>
+
+            <article class="dash-card rounded-2xl p-5">
+                <h3 class="text-base font-bold text-slate-900 mb-4">Thanh toán thất bại gần đây</h3>
+                @if (d.RecentFailedPayments.Any())
+                {
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left border-b border-slate-200 text-slate-500 uppercase text-xs">
+                                    <th class="py-2 pr-2">Payment</th>
+                                    <th class="py-2 px-2">Khách hàng</th>
+                                    <th class="py-2 px-2 text-right">Số tiền</th>
+                                    <th class="py-2 px-2">Phương thức</th>
+                                    <th class="py-2 pl-2">Thời gian</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var pay in d.RecentFailedPayments)
+                                {
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-3 pr-2 text-slate-500">#@pay.PaymentId</td>
+                                        <td class="py-3 px-2 text-slate-700">@pay.CustomerName</td>
+                                        <td class="py-3 px-2 text-right text-red-600 font-semibold">@pay.Amount.ToString("N0") VND</td>
+                                        <td class="py-3 px-2 text-slate-500">@pay.Method</td>
+                                        <td class="py-3 pl-2 text-slate-500">@pay.CreatedAt.ToString("dd/MM HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-sm text-slate-500">Không có thanh toán thất bại gần đây.</p>
+                }
+            </article>
+        </section>
     }
 </div>
 
 @section Scripts {
     <script>
-        // Revenue chart
-        new Chart(document.getElementById('revenueChart'), {
-            type: 'line',
-            data: {
-                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(r => r.Label))),
-                datasets: [{
-                    label: 'Doanh thu',
-                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(r => r.Amount))),
-                    borderColor: '#34d399',
-                    backgroundColor: 'rgba(52,211,153,0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        const muted = '#64748b';
+        const grid = 'rgba(148,163,184,.25)';
+
+        function el(id) { return document.getElementById(id); }
+
+        if (el('revenueChart')) {
+            const selectedDays = @d.SelectedDays;
+            const revenueLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(x => x.Label)));
+            const revenueData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.RevenueLastThirtyDays.Select(x => x.Amount)));
+
+            new Chart(el('revenueChart'), {
+                type: 'line',
+                data: {
+                    labels: revenueLabels,
+                    datasets: [{
+                        label: 'Doanh thu',
+                        data: revenueData,
+                        borderColor: '#0f766e',
+                        backgroundColor: 'rgba(20,184,166,.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: selectedDays >= 90 ? 0 : 2,
+                        pointHoverRadius: 4,
+                        pointHitRadius: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            ticks: {
+                                color: muted,
+                                autoSkip: true,
+                                maxTicksLimit: selectedDays >= 90 ? 10 : 12,
+                                maxRotation: 0,
+                                minRotation: 0
+                            },
+                            grid: { color: grid }
+                        },
+                        y: { ticks: { color: muted }, grid: { color: grid } }
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        // Order Status Doughnut
-        const statusColors = ['#60a5fa', '#fbbf24', '#34d399', '#818cf8', '#f87171', '#fb923c'];
-        new Chart(document.getElementById('orderStatusChart'), {
-            type: 'doughnut',
-            data: {
-                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(s => s.Status))),
-                datasets: [{
-                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(s => s.Count))),
-                    backgroundColor: statusColors.slice(0, @d.OrderStatusDistribution.Count),
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                cutout: '60%',
-                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
-            }
-        });
-
-        // Goal segments
-        const goalColors = ['#34d399', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa'];
-        new Chart(document.getElementById('goalChart'), {
-            type: 'doughnut',
-            data: {
-                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.UserGoalSegments.Select(g => g.Goal))),
-                datasets: [{
-                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.UserGoalSegments.Select(g => g.Count))),
-                    backgroundColor: goalColors.slice(0, @d.UserGoalSegments.Count),
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                cutout: '60%',
-                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
-            }
-        });
-
-        // New Subscriptions (last 7 days) - bar chart
-        new Chart(document.getElementById('newSubsChart'), {
-            type: 'bar',
-            data: {
-                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Label))),
-                datasets: [{
-                    label: 'Đăng ký mới',
-                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Count))),
-                    backgroundColor: 'rgba(52,211,153,0.7)',
-                    borderColor: '#34d399',
-                    borderWidth: 1,
-                    borderRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#6b7280' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: '#6b7280', stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+        if (el('orderStatusChart')) {
+            new Chart(el('orderStatusChart'), {
+                type: 'bar',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(x => x.Status))),
+                    datasets: [{
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.OrderStatusDistribution.Select(x => x.Count))),
+                        backgroundColor: ['#0ea5e9', '#14b8a6', '#f59e0b', '#ef4444', '#6366f1', '#334155'],
+                        borderRadius: 8,
+                        maxBarThickness: 36
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: muted }, grid: { display: false } },
+                        y: { ticks: { color: muted, stepSize: 1 }, grid: { color: grid }, beginAtZero: true }
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        // Subscription Plan Distribution - doughnut
-        const planColors = ['#818cf8', '#34d399', '#fbbf24', '#f87171', '#60a5fa'];
-        new Chart(document.getElementById('planDistChart'), {
-            type: 'doughnut',
-            data: {
-                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.PlanName))),
-                datasets: [{
-                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.Count))),
-                    backgroundColor: planColors.slice(0, @d.SubscriptionPlanDistribution.Count),
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                cutout: '60%',
-                plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', padding: 12 } } }
-            }
-        });
+        if (el('newSubsChart')) {
+            new Chart(el('newSubsChart'), {
+                type: 'bar',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Label))),
+                    datasets: [{
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.NewSubscriptionsLast7Days.Select(x => x.Count))),
+                        borderRadius: 7,
+                        maxBarThickness: 28,
+                        backgroundColor: 'rgba(29,78,216,.78)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: muted }, grid: { display: false } },
+                        y: { ticks: { color: muted, stepSize: 1 }, grid: { color: grid }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        if (el('planDistChart')) {
+            new Chart(el('planDistChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.PlanName))),
+                    datasets: [{
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.SubscriptionPlanDistribution.Select(x => x.Count))),
+                        backgroundColor: ['#0f766e', '#0ea5e9', '#f59e0b', '#ef4444', '#475569'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: '58%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: muted, padding: 14, boxWidth: 12 }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (el('quarterlyRevenueChart')) {
+            new Chart(el('quarterlyRevenueChart'), {
+                type: 'bar',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.QuarterlyRevenueCurrentYear.Select(x => x.QuarterLabel))),
+                    datasets: [{
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.QuarterlyRevenueCurrentYear.Select(x => x.Revenue))),
+                        borderRadius: 8,
+                        maxBarThickness: 42,
+                        backgroundColor: 'rgba(15,118,110,.78)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: muted }, grid: { display: false } },
+                        y: { ticks: { color: muted }, grid: { color: grid }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        if (el('yearlyRevenueChart')) {
+            new Chart(el('yearlyRevenueChart'), {
+                type: 'line',
+                data: {
+                    labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.YearlyRevenueLastFiveYears.Select(x => x.Year))),
+                    datasets: [{
+                        data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(d.YearlyRevenueLastFiveYears.Select(x => x.Revenue))),
+                        borderColor: '#1d4ed8',
+                        backgroundColor: 'rgba(59,130,246,.14)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: muted }, grid: { color: grid } },
+                        y: { ticks: { color: muted }, grid: { color: grid }, beginAtZero: true }
+                    }
+                }
+            });
+        }
     </script>
 }
+

@@ -1,9 +1,64 @@
 using BusinessObjects.Entities;
+using System.Text.RegularExpressions;
 
 namespace MealPrep.DAL.Data;
 
 public static class MealSeedData
 {
+    private static readonly Regex IngredientHasQuantityRegex = new(
+        @"^\s*\d+(?:[\.,]\d+)?\s*(?:g|kg)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+
+    private static readonly (string Keyword, string Quantity)[] IngredientQuantityRules =
+    {
+        ("quả bơ", "80g"),
+        ("ức gà", "180g"),
+        ("đùi gà", "220g"),
+        ("gà", "180g"),
+        ("cá hồi", "160g"),
+        ("cá ngừ", "150g"),
+        ("cá", "150g"),
+        ("thịt bò", "150g"),
+        ("bò xay", "140g"),
+        ("tôm", "130g"),
+        ("mực", "120g"),
+        ("đậu hũ", "140g"),
+        ("đậu gà", "110g"),
+        ("trứng", "60g"),
+        ("quinoa", "80g"),
+        ("gạo lứt", "120g"),
+        ("gạo tấm", "130g"),
+        ("gạo tẻ", "90g"),
+        ("bún", "150g"),
+        ("mì spaghetti", "120g"),
+        ("mì ramen", "120g"),
+        ("pasta", "120g"),
+        ("bánh mì", "90g"),
+        ("bánh burger", "90g"),
+        ("đế pizza", "180g"),
+        ("phô mai mozzarella", "60g"),
+        ("phô mai cheddar", "35g"),
+        ("phô mai", "30g"),
+        ("khoai tây", "120g"),
+        ("khoai lang", "120g"),
+        ("bông cải", "100g"),
+        ("xà lách", "50g"),
+        ("cà chua", "70g"),
+        ("cà rốt", "60g"),
+        ("hành tây", "40g"),
+        ("hành lá", "15g"),
+        ("rau", "60g"),
+        ("mật ong", "15g"),
+        ("dầu oliu", "10g"),
+        ("dầu", "10g"),
+        ("bơ", "12g"),
+        ("sốt", "20g"),
+        ("nước mắm", "15g"),
+        ("nước dùng", "250g"),
+        ("gia vị", "8g"),
+    };
+
     /// <summary>
     /// Danh sách món ăn đa dạng (healthy + comfort). Embedding luôn = null.
     /// </summary>
@@ -448,7 +503,67 @@ public static class MealSeedData
             }
         }
 
+        ApplyDefaultIngredientQuantities(meals);
+
         return meals;
+    }
+
+    /// <summary>
+    /// Gán định lượng mặc định (gram) cho nguyên liệu chưa có số lượng.
+    /// Trả về số món ăn có thay đổi dữ liệu Ingredients.
+    /// </summary>
+    public static int ApplyDefaultIngredientQuantities(IEnumerable<Meal> meals)
+    {
+        var changedMeals = 0;
+
+        foreach (var meal in meals)
+        {
+            if (meal.Ingredients == null || meal.Ingredients.Length == 0)
+                continue;
+
+            var changed = false;
+            var updatedIngredients = new string[meal.Ingredients.Length];
+
+            for (var i = 0; i < meal.Ingredients.Length; i++)
+            {
+                var ingredient = (meal.Ingredients[i] ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(ingredient))
+                {
+                    updatedIngredients[i] = ingredient;
+                    continue;
+                }
+
+                if (IngredientHasQuantityRegex.IsMatch(ingredient))
+                {
+                    updatedIngredients[i] = ingredient;
+                    continue;
+                }
+
+                var qty = ResolveDefaultQuantity(ingredient);
+                updatedIngredients[i] = $"{qty} {ingredient}";
+                changed = true;
+            }
+
+            if (!changed)
+                continue;
+
+            meal.Ingredients = updatedIngredients;
+            changedMeals++;
+        }
+
+        return changedMeals;
+    }
+
+    private static string ResolveDefaultQuantity(string ingredient)
+    {
+        var normalized = ingredient.ToLowerInvariant();
+        foreach (var (keyword, qty) in IngredientQuantityRules)
+        {
+            if (normalized.Contains(keyword))
+                return qty;
+        }
+
+        return "50g";
     }
 }
 //using BusinessObjects.Entities;
