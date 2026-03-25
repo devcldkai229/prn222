@@ -29,13 +29,21 @@
             _ => value.ToString("N0"),
         };
 
+    var comparisonQuery = $"&q1y={d.SelectedQuarter1Year}&q1={d.SelectedQuarter1}&q2y={d.SelectedQuarter2Year}&q2={d.SelectedQuarter2}&y1={d.SelectedYear1}&y2={d.SelectedYear2}";
+
+    string ComparisonTrendClass(decimal value)
+        => value >= 0m ? "text-emerald-600" : "text-red-600";
+
+    string ComparisonPercentText(decimal? value)
+        => value.HasValue ? $"{value.Value:+0.0;-0.0}%" : "N/A";
+
     string ModeHref(string key)
         => hasCustomRange
-            ? $"?mode={key}&from={d.RangeStartDate:yyyy-MM-dd}&to={d.RangeEndDate:yyyy-MM-dd}"
-            : $"?mode={key}&days={d.SelectedDays}";
+            ? $"?mode={key}&from={d.RangeStartDate:yyyy-MM-dd}&to={d.RangeEndDate:yyyy-MM-dd}{comparisonQuery}"
+            : $"?mode={key}&days={d.SelectedDays}{comparisonQuery}";
 
     string DaysHref(int day)
-        => $"?mode={mode}&days={day}";
+        => $"?mode={mode}&days={day}{comparisonQuery}";
 }
 
 @section Styles {
@@ -329,6 +337,193 @@
 
     @if (showStrategic)
     {
+        <section class="dash-card rounded-2xl p-5 space-y-5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-slate-900">So sánh doanh thu tùy chọn</h3>
+                <span class="text-xs text-slate-500">Chọn quý hoặc năm bất kỳ</span>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <article class="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
+                    <p class="text-sm font-semibold text-slate-700 mb-3">So sánh giữa 2 quý</p>
+                    <form id="quarterCompareForm" method="get" class="grid grid-cols-1 md:grid-cols-2 gap-3" data-compare-form="quarter">
+                        <input type="hidden" name="mode" value="@mode" />
+                        @if (hasCustomRange)
+                        {
+                            <input type="hidden" name="from" value="@fromValue" />
+                            <input type="hidden" name="to" value="@toValue" />
+                        }
+                        else
+                        {
+                            <input type="hidden" name="days" value="@d.SelectedDays" />
+                        }
+                        <input type="hidden" name="y1" value="@d.SelectedYear1" />
+                        <input type="hidden" name="y2" value="@d.SelectedYear2" />
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-500">Mốc A</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select name="q1y" class="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="q1ySelect">
+                                    @foreach (var year in d.RevenueComparisonYears)
+                                    {
+                                        if (year == d.SelectedQuarter1Year)
+                                        {
+                                            <option value="@year" selected>@year</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@year">@year</option>
+                                        }
+                                    }
+                                </select>
+                                <select name="q1" class="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="q1Select">
+                                    @for (var q = 1; q <= 4; q++)
+                                    {
+                                        if (q == d.SelectedQuarter1)
+                                        {
+                                            <option value="@q" selected>@($"Q{q}")</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@q">@($"Q{q}")</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-500">Mốc B</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select name="q2y" class="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="q2ySelect">
+                                    @foreach (var year in d.RevenueComparisonYears)
+                                    {
+                                        if (year == d.SelectedQuarter2Year)
+                                        {
+                                            <option value="@year" selected>@year</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@year">@year</option>
+                                        }
+                                    }
+                                </select>
+                                <select name="q2" class="px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="q2Select">
+                                    @for (var q = 1; q <= 4; q++)
+                                    {
+                                        if (q == d.SelectedQuarter2)
+                                        {
+                                            <option value="@q" selected>@($"Q{q}")</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@q">@($"Q{q}")</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2 flex items-center justify-between gap-3 pt-1">
+                            <p class="text-xs text-slate-500" id="quarterCompareSummary">A: <span class="font-semibold">@($"Q{d.SelectedQuarter1}/{d.SelectedQuarter1Year}")</span> | B: <span class="font-semibold">@($"Q{d.SelectedQuarter2}/{d.SelectedQuarter2Year}")</span></p>
+                            <button type="submit" class="px-3.5 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white border border-emerald-700" id="quarterCompareButton">So sánh quý</button>
+                        </div>
+                    </form>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Doanh thu A</p>
+                            <p class="font-bold text-slate-800" id="quarterRevenueA">@d.SelectedQuarter1Revenue.ToString("N0") VND</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Doanh thu B</p>
+                            <p class="font-bold text-slate-800" id="quarterRevenueB">@d.SelectedQuarter2Revenue.ToString("N0") VND</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Chênh lệch A-B</p>
+                            <p class="font-bold @ComparisonTrendClass(d.SelectedQuarterRevenueDiffAmount)" id="quarterDiffAmount">@d.SelectedQuarterRevenueDiffAmount.ToString("+#,##0;-#,##0;0") VND</p>
+                            <p class="text-xs @ComparisonTrendClass(d.SelectedQuarterRevenueDiffAmount)" id="quarterDiffPercent">@ComparisonPercentText(d.SelectedQuarterRevenueDiffPercent)</p>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
+                    <p class="text-sm font-semibold text-slate-700 mb-3">So sánh giữa 2 năm</p>
+                    <form id="yearCompareForm" method="get" class="grid grid-cols-1 md:grid-cols-2 gap-3" data-compare-form="year">
+                        <input type="hidden" name="mode" value="@mode" />
+                        @if (hasCustomRange)
+                        {
+                            <input type="hidden" name="from" value="@fromValue" />
+                            <input type="hidden" name="to" value="@toValue" />
+                        }
+                        else
+                        {
+                            <input type="hidden" name="days" value="@d.SelectedDays" />
+                        }
+                        <input type="hidden" name="q1y" value="@d.SelectedQuarter1Year" />
+                        <input type="hidden" name="q1" value="@d.SelectedQuarter1" />
+                        <input type="hidden" name="q2y" value="@d.SelectedQuarter2Year" />
+                        <input type="hidden" name="q2" value="@d.SelectedQuarter2" />
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-500">Năm A</label>
+                            <select name="y1" class="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="y1Select">
+                                @foreach (var year in d.RevenueComparisonYears)
+                                {
+                                    if (year == d.SelectedYear1)
+                                    {
+                                        <option value="@year" selected>@year</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@year">@year</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-slate-500">Năm B</label>
+                            <select name="y2" class="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-300 text-sm" id="y2Select">
+                                @foreach (var year in d.RevenueComparisonYears)
+                                {
+                                    if (year == d.SelectedYear2)
+                                    {
+                                        <option value="@year" selected>@year</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@year">@year</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="md:col-span-2 flex items-center justify-between gap-3 pt-1">
+                            <p class="text-xs text-slate-500" id="yearCompareSummary">A: <span class="font-semibold">@d.SelectedYear1</span> | B: <span class="font-semibold">@d.SelectedYear2</span></p>
+                            <button type="submit" class="px-3.5 py-2 rounded-xl text-sm font-semibold bg-emerald-600 text-white border border-emerald-700" id="yearCompareButton">So sánh năm</button>
+                        </div>
+                    </form>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Doanh thu năm A</p>
+                            <p class="font-bold text-slate-800" id="yearRevenueA">@d.SelectedYear1Revenue.ToString("N0") VND</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Doanh thu năm B</p>
+                            <p class="font-bold text-slate-800" id="yearRevenueB">@d.SelectedYear2Revenue.ToString("N0") VND</p>
+                        </div>
+                        <div class="rounded-lg bg-white border border-slate-200 p-2.5">
+                            <p class="text-xs text-slate-500">Chênh lệch A-B</p>
+                            <p class="font-bold @ComparisonTrendClass(d.SelectedYearRevenueDiffAmount)" id="yearDiffAmount">@d.SelectedYearRevenueDiffAmount.ToString("+#,##0;-#,##0;0") VND</p>
+                            <p class="text-xs @ComparisonTrendClass(d.SelectedYearRevenueDiffAmount)" id="yearDiffPercent">@ComparisonPercentText(d.SelectedYearRevenueDiffPercent)</p>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
         <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <article class="dash-card rounded-2xl p-5">
                 <p class="metric-label">So sánh quý</p>
@@ -627,6 +822,119 @@
                 }
             });
         }
+
+        function formatCurrency(v) {
+            return `${new Intl.NumberFormat('vi-VN').format(v)} VND`;
+        }
+
+        function formatSignedCurrency(v) {
+            const abs = new Intl.NumberFormat('vi-VN').format(Math.abs(v));
+            if (v > 0) return `+${abs} VND`;
+            if (v < 0) return `-${abs} VND`;
+            return `0 VND`;
+        }
+
+        function formatPercent(v) {
+            if (v === null || v === undefined) return 'N/A';
+            return `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`;
+        }
+
+        function applyTrendClass(amountElement, percentElement, value) {
+            const amountClass = value >= 0 ? 'font-bold text-emerald-600' : 'font-bold text-red-600';
+            const percentClass = value >= 0 ? 'text-xs text-emerald-600' : 'text-xs text-red-600';
+            amountElement.className = amountClass;
+            percentElement.className = percentClass;
+        }
+
+        function syncAllCompareInputs(data) {
+            const map = {
+                q1y: data.selectedQuarter1Year,
+                q1: data.selectedQuarter1,
+                q2y: data.selectedQuarter2Year,
+                q2: data.selectedQuarter2,
+                y1: data.selectedYear1,
+                y2: data.selectedYear2
+            };
+
+            Object.entries(map).forEach(([name, value]) => {
+                document.querySelectorAll(`select[name="${name}"], input[name="${name}"]`).forEach(control => {
+                    control.value = String(value);
+                });
+            });
+        }
+
+        async function submitComparisonForm(form, button) {
+            const params = new URLSearchParams(new FormData(form));
+            params.set('handler', 'RevenueComparison');
+            const url = `${window.location.pathname}?${params.toString()}`;
+
+            const oldText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Đang tải...';
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Không thể tải dữ liệu so sánh.');
+                }
+
+                const data = await response.json();
+                syncAllCompareInputs(data);
+
+                const quarterSummary = el('quarterCompareSummary');
+                if (quarterSummary) {
+                    quarterSummary.innerHTML = `A: <span class="font-semibold">Q${data.selectedQuarter1}/${data.selectedQuarter1Year}</span> | B: <span class="font-semibold">Q${data.selectedQuarter2}/${data.selectedQuarter2Year}</span>`;
+                }
+
+                const quarterA = el('quarterRevenueA');
+                const quarterB = el('quarterRevenueB');
+                const quarterDiffAmount = el('quarterDiffAmount');
+                const quarterDiffPercent = el('quarterDiffPercent');
+                if (quarterA && quarterB && quarterDiffAmount && quarterDiffPercent) {
+                    quarterA.textContent = formatCurrency(data.selectedQuarter1Revenue);
+                    quarterB.textContent = formatCurrency(data.selectedQuarter2Revenue);
+                    quarterDiffAmount.textContent = formatSignedCurrency(data.selectedQuarterRevenueDiffAmount);
+                    quarterDiffPercent.textContent = formatPercent(data.selectedQuarterRevenueDiffPercent);
+                    applyTrendClass(quarterDiffAmount, quarterDiffPercent, data.selectedQuarterRevenueDiffAmount);
+                }
+
+                const yearSummary = el('yearCompareSummary');
+                if (yearSummary) {
+                    yearSummary.innerHTML = `A: <span class="font-semibold">${data.selectedYear1}</span> | B: <span class="font-semibold">${data.selectedYear2}</span>`;
+                }
+
+                const yearA = el('yearRevenueA');
+                const yearB = el('yearRevenueB');
+                const yearDiffAmount = el('yearDiffAmount');
+                const yearDiffPercent = el('yearDiffPercent');
+                if (yearA && yearB && yearDiffAmount && yearDiffPercent) {
+                    yearA.textContent = formatCurrency(data.selectedYear1Revenue);
+                    yearB.textContent = formatCurrency(data.selectedYear2Revenue);
+                    yearDiffAmount.textContent = formatSignedCurrency(data.selectedYearRevenueDiffAmount);
+                    yearDiffPercent.textContent = formatPercent(data.selectedYearRevenueDiffPercent);
+                    applyTrendClass(yearDiffAmount, yearDiffPercent, data.selectedYearRevenueDiffAmount);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Không tải được dữ liệu so sánh. Vui lòng thử lại.');
+            } finally {
+                button.disabled = false;
+                button.textContent = oldText;
+            }
+        }
+
+        document.querySelectorAll('form[data-compare-form]').forEach(form => {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = form.querySelector('button[type="submit"]');
+                if (!button) return;
+                await submitComparisonForm(form, button);
+            });
+        });
     </script>
 }
 

@@ -87,6 +87,23 @@ public class AdminDashboardViewModel
     public decimal PreviousYearRevenue { get; set; }
     public decimal YearOverYearChangePercent { get; set; }
 
+    public List<int> RevenueComparisonYears { get; set; } = new();
+    public int SelectedQuarter1Year { get; set; }
+    public int SelectedQuarter1 { get; set; }
+    public int SelectedQuarter2Year { get; set; }
+    public int SelectedQuarter2 { get; set; }
+    public decimal SelectedQuarter1Revenue { get; set; }
+    public decimal SelectedQuarter2Revenue { get; set; }
+    public decimal SelectedQuarterRevenueDiffAmount { get; set; }
+    public decimal? SelectedQuarterRevenueDiffPercent { get; set; }
+
+    public int SelectedYear1 { get; set; }
+    public int SelectedYear2 { get; set; }
+    public decimal SelectedYear1Revenue { get; set; }
+    public decimal SelectedYear2Revenue { get; set; }
+    public decimal SelectedYearRevenueDiffAmount { get; set; }
+    public decimal? SelectedYearRevenueDiffPercent { get; set; }
+
     public List<RevenueDataPoint> RevenueLastThirtyDays { get; set; } = new();
     public List<GoalSegment> UserGoalSegments { get; set; } = new();
     public List<TopDislikedMeal> TopDislikedMeals { get; set; } = new();
@@ -108,7 +125,17 @@ public class AdminDashboardViewModel
 
 public interface IAdminDashboardService
 {
-    Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30, DateOnly? fromDate = null, DateOnly? toDate = null);
+    Task<AdminDashboardViewModel> GetDashboardAsync(
+        int days = 30,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        int? quarter1Year = null,
+        int? quarter1 = null,
+        int? quarter2Year = null,
+        int? quarter2 = null,
+        int? year1 = null,
+        int? year2 = null
+    );
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
@@ -119,7 +146,17 @@ public class AdminDashboardService : IAdminDashboardService
 
     public AdminDashboardService(AppDbContext ctx) => _ctx = ctx;
 
-    public async Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30, DateOnly? fromDate = null, DateOnly? toDate = null)
+    public async Task<AdminDashboardViewModel> GetDashboardAsync(
+        int days = 30,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        int? quarter1Year = null,
+        int? quarter1 = null,
+        int? quarter2Year = null,
+        int? quarter2 = null,
+        int? year1 = null,
+        int? year2 = null
+    )
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var tomorrow = today.AddDays(1);
@@ -589,6 +626,59 @@ public class AdminDashboardService : IAdminDashboardService
             ? decimal.Round((currentYearRevenue - previousYearRevenue) * 100m / previousYearRevenue, 1)
             : 0m;
 
+        var revenueComparisonYears = quarterlyRevenueRaw
+            .Select(x => x.Year)
+            .Concat(yearlyRevenueRaw.Select(x => x.Year))
+            .Concat(Enumerable.Range(currentYear - 5, 6))
+            .Where(y => y <= currentYear)
+            .Distinct()
+            .OrderByDescending(y => y)
+            .ToList();
+
+        if (revenueComparisonYears.Count == 0)
+        {
+            revenueComparisonYears.Add(currentYear);
+        }
+
+        var selectedQuarter1Year = quarter1Year.HasValue && revenueComparisonYears.Contains(quarter1Year.Value)
+            ? quarter1Year.Value
+            : currentYear;
+        var selectedQuarter2Year = quarter2Year.HasValue && revenueComparisonYears.Contains(quarter2Year.Value)
+            ? quarter2Year.Value
+            : previousQuarterYear;
+
+        selectedQuarter2Year = revenueComparisonYears.Contains(selectedQuarter2Year)
+            ? selectedQuarter2Year
+            : revenueComparisonYears.First();
+
+        var selectedQuarter1 = quarter1 is >= 1 and <= 4 ? quarter1.Value : currentQuarter;
+        var selectedQuarter2 = quarter2 is >= 1 and <= 4 ? quarter2.Value : previousQuarter;
+
+        var selectedQuarter1Revenue = GetQuarterRevenue(selectedQuarter1Year, selectedQuarter1);
+        var selectedQuarter2Revenue = GetQuarterRevenue(selectedQuarter2Year, selectedQuarter2);
+        var selectedQuarterRevenueDiffAmount = selectedQuarter1Revenue - selectedQuarter2Revenue;
+        var selectedQuarterRevenueDiffPercent = selectedQuarter2Revenue > 0m
+            ? decimal.Round(selectedQuarterRevenueDiffAmount * 100m / selectedQuarter2Revenue, 1)
+            : (decimal?)null;
+
+        var selectedYear1 = year1.HasValue && revenueComparisonYears.Contains(year1.Value)
+            ? year1.Value
+            : currentYear;
+        var selectedYear2 = year2.HasValue && revenueComparisonYears.Contains(year2.Value)
+            ? year2.Value
+            : currentYear - 1;
+
+        selectedYear2 = revenueComparisonYears.Contains(selectedYear2)
+            ? selectedYear2
+            : revenueComparisonYears.First();
+
+        var selectedYear1Revenue = GetYearRevenue(selectedYear1);
+        var selectedYear2Revenue = GetYearRevenue(selectedYear2);
+        var selectedYearRevenueDiffAmount = selectedYear1Revenue - selectedYear2Revenue;
+        var selectedYearRevenueDiffPercent = selectedYear2Revenue > 0m
+            ? decimal.Round(selectedYearRevenueDiffAmount * 100m / selectedYear2Revenue, 1)
+            : (decimal?)null;
+
         var currentQuarterOrders = GetOrderQuarter(currentYear, currentQuarter);
         var previousQuarterOrders = GetOrderQuarter(previousQuarterYear, previousQuarter);
         var currentYearOrders = GetOrderYear(currentYear);
@@ -781,6 +871,21 @@ public class AdminDashboardService : IAdminDashboardService
             CurrentYearRevenue = currentYearRevenue,
             PreviousYearRevenue = previousYearRevenue,
             YearOverYearChangePercent = yearOverYearChangePercent,
+            RevenueComparisonYears = revenueComparisonYears,
+            SelectedQuarter1Year = selectedQuarter1Year,
+            SelectedQuarter1 = selectedQuarter1,
+            SelectedQuarter2Year = selectedQuarter2Year,
+            SelectedQuarter2 = selectedQuarter2,
+            SelectedQuarter1Revenue = selectedQuarter1Revenue,
+            SelectedQuarter2Revenue = selectedQuarter2Revenue,
+            SelectedQuarterRevenueDiffAmount = selectedQuarterRevenueDiffAmount,
+            SelectedQuarterRevenueDiffPercent = selectedQuarterRevenueDiffPercent,
+            SelectedYear1 = selectedYear1,
+            SelectedYear2 = selectedYear2,
+            SelectedYear1Revenue = selectedYear1Revenue,
+            SelectedYear2Revenue = selectedYear2Revenue,
+            SelectedYearRevenueDiffAmount = selectedYearRevenueDiffAmount,
+            SelectedYearRevenueDiffPercent = selectedYearRevenueDiffPercent,
 
             RevenueLastThirtyDays = revenueSeries,
 
