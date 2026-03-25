@@ -7,6 +7,8 @@ namespace MealPrep.DAL.Data;
 
 public static class DatabaseSeeder
 {
+    private static readonly DateOnly SeedStartDate = new(2023, 1, 1);
+
     /// <summary>
     /// Seeds default roles and an admin user if the database is empty.
     /// Admin: admin@mealprep.com / Admin@123
@@ -186,7 +188,7 @@ public static class DatabaseSeeder
             Console.WriteLine($"[Seed] Added default ingredient quantities for {changedMeals} meals.");
         }
 
-        // 8. Seed large historical dataset (2025-2026) for dashboard testing
+        // 8. Seed historical dataset (2023 -> today) for dashboard testing
         await SeedHistoricalLoadTestDataAsync(db, userRoleId, shipperRoleId);
     }
 
@@ -201,17 +203,18 @@ public static class DatabaseSeeder
         Guid shipperRoleId
     )
     {
-        var from = new DateOnly(2025, 1, 1);
-        var to = new DateOnly(2026, 12, 31);
+        var from = SeedStartDate;
+        var to = DateOnly.FromDateTime(DateTime.UtcNow);
+        var utcNow = DateTime.UtcNow;
 
         var existingOrders = await db.Orders.CountAsync(o => o.DeliveryDate >= from && o.DeliveryDate <= to);
-        if (existingOrders >= 5000)
+        if (existingOrders >= 300)
         {
-            Console.WriteLine($"[Seed] Historical dataset already exists ({existingOrders} orders in 2025-2026). Skipped.");
+            Console.WriteLine($"[Seed] Historical dataset already exists ({existingOrders} orders in 2023->today). Skipped.");
             return;
         }
 
-        var rnd = new Random(20260324);
+        var rnd = new Random(20260325);
 
         await EnsureTestUsersAsync(db, userRoleId, shipperRoleId, rnd);
 
@@ -232,17 +235,23 @@ public static class DatabaseSeeder
         }
 
         var subscriptions = new List<Subscription>();
-        for (var year = 2025; year <= 2026; year++)
+        for (var year = from.Year; year <= to.Year; year++)
         {
-            for (var month = 1; month <= 12; month++)
+            var monthStart = year == from.Year ? from.Month : 1;
+            var monthEnd = year == to.Year ? to.Month : 12;
+            for (var month = monthStart; month <= monthEnd; month++)
             {
-                var monthlyCount = 80;
+                var monthlyCount = 6;
                 for (var i = 0; i < monthlyCount; i++)
                 {
                     var customer = customers[rnd.Next(customers.Count)];
                     var plan = plans[rnd.Next(plans.Count)];
                     var day = rnd.Next(1, DateTime.DaysInMonth(year, month) + 1);
                     var startDate = new DateOnly(year, month, day);
+                    if (startDate > to)
+                    {
+                        continue;
+                    }
                     var rawEnd = startDate.AddDays(plan.DurationDays - 1);
                     var endDate = rawEnd > to ? to : rawEnd;
 
@@ -263,7 +272,7 @@ public static class DatabaseSeeder
                         Status = status,
                         TotalAmount = totalAmount,
                         CreatedAt = startDate.ToDateTime(new TimeOnly(8, rnd.Next(0, 59)), DateTimeKind.Utc),
-                        UpdatedAt = DateTime.UtcNow,
+                        UpdatedAt = startDate.ToDateTime(new TimeOnly(10, rnd.Next(0, 59)), DateTimeKind.Utc),
                     });
                 }
             }
@@ -276,10 +285,31 @@ public static class DatabaseSeeder
         var paymentTxs = new List<PaymentTransaction>();
         foreach (var sub in subscriptions)
         {
-            var createdAt = sub.StartDate.ToDateTime(new TimeOnly(9, rnd.Next(0, 59)), DateTimeKind.Utc).AddDays(-rnd.Next(0, 4));
+            var createdAt = sub.StartDate.ToDateTime(new TimeOnly(9, rnd.Next(0, 59)), DateTimeKind.Utc).AddDays(-rnd.Next(0, 3));
+            var minCreatedAt = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            if (createdAt < minCreatedAt)
+            {
+                createdAt = minCreatedAt;
+            }
+            if (createdAt > utcNow)
+            {
+                createdAt = utcNow;
+            }
+
             var method = PickOne(rnd, "MoMo", "VNPay", "BankTransfer", "COD");
             var paymentStatus = ResolvePaymentStatus(sub.Status, rnd);
             var paymentCode = $"SEED-{sub.Id}-{Guid.NewGuid():N}";
+            var paidAt = paymentStatus == "Paid" ? createdAt.AddMinutes(rnd.Next(5, 120)) : (DateTime?)null;
+            if (paidAt.HasValue && paidAt.Value > utcNow)
+            {
+                paidAt = utcNow;
+            }
+
+            var expiredAt = paymentStatus is "Expired" or "Pending" ? createdAt.AddDays(2) : (DateTime?)null;
+            if (expiredAt.HasValue && expiredAt.Value > utcNow)
+            {
+                expiredAt = utcNow;
+            }
 
             var payment = new Payment
             {
@@ -292,8 +322,8 @@ public static class DatabaseSeeder
                 PaymentCode = paymentCode,
                 Description = $"Seed payment for subscription {sub.Id}",
                 CreatedAt = createdAt,
-                PaidAt = paymentStatus == "Paid" ? createdAt.AddMinutes(rnd.Next(5, 180)) : null,
-                ExpiredAt = paymentStatus is "Expired" or "Pending" ? createdAt.AddDays(2) : null,
+                PaidAt = paidAt,
+                ExpiredAt = expiredAt,
             };
 
             payments.Add(payment);
@@ -332,7 +362,7 @@ public static class DatabaseSeeder
             if (span <= 0)
                 continue;
 
-            var orderCount = Math.Clamp(span / 2 + rnd.Next(2, 8), 3, 24);
+            var orderCount = Math.Clamp(span / 7 + rnd.Next(1, 3), 1, 10);
             for (var i = 0; i < orderCount; i++)
             {
                 var deliveryDate = startDate.AddDays(rnd.Next(0, span));
@@ -361,7 +391,7 @@ public static class DatabaseSeeder
         var orderItems = new List<OrderItem>();
         foreach (var order in orders)
         {
-            var itemCount = rnd.Next(1, 4);
+                var itemCount = rnd.Next(1, 3);
             for (var i = 0; i < itemCount; i++)
             {
                 var meal = meals[rnd.Next(meals.Count)];
@@ -373,7 +403,7 @@ public static class DatabaseSeeder
                     OrderId = order.Id,
                     MealId = meal.Id,
                     Status = itemStatus,
-                    Quantity = rnd.Next(1, 4),
+                    Quantity = rnd.Next(1, 3),
                     DeliverySlotId = slot.Id,
                     DeliveryAddress = $"{rnd.Next(1, 300)} Nguyen Trai, Quan {rnd.Next(1, 12)}, TP.HCM",
                     DeliveredAt = itemStatus == OrderItemStatus.Delivered
@@ -423,7 +453,7 @@ public static class DatabaseSeeder
         db.MealRatings.AddRange(ratings);
         await db.SaveChangesAsync();
 
-        Console.WriteLine($"[Seed] Historical 2025-2026 dataset created: {subscriptions.Count} subscriptions, {payments.Count} payments, {orders.Count} orders, {orderItems.Count} items, {ratings.Count} ratings.");
+        Console.WriteLine($"[Seed] Historical 2023->today dataset created: {subscriptions.Count} subscriptions, {payments.Count} payments, {orders.Count} orders, {orderItems.Count} items, {ratings.Count} ratings.");
     }
 
     private static async Task EnsureTestUsersAsync(
@@ -433,8 +463,11 @@ public static class DatabaseSeeder
         Random rnd
     )
     {
+        var fromUtc = SeedStartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var toUtc = DateTime.UtcNow;
+
         var existingCustomerCount = await db.Users.CountAsync(u => u.AppRoleId == userRoleId);
-        var targetCustomers = 140;
+        var targetCustomers = 24;
         if (existingCustomerCount < targetCustomers)
         {
             var toCreate = targetCustomers - existingCustomerCount;
@@ -442,19 +475,20 @@ public static class DatabaseSeeder
             for (var i = 0; i < toCreate; i++)
             {
                 var idx = existingCustomerCount + i + 1;
+                var gender = rnd.NextDouble() < 0.48 ? Gender.Male : rnd.NextDouble() < 0.96 ? Gender.Female : Gender.Unknown;
                 users.Add(new User
                 {
                     Id = Guid.NewGuid(),
-                    Email = $"loadtest.user{idx:D4}@mealprep.local",
-                    FullName = $"Load Test User {idx:D4}",
+                    Email = $"customer{idx:D3}@mealprep.local",
+                    FullName = BuildRealisticFullName(rnd, gender),
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("User@123"),
-                    Gender = rnd.NextDouble() < 0.45 ? Gender.Male : rnd.NextDouble() < 0.9 ? Gender.Female : Gender.Unknown,
+                    Gender = gender,
                     Age = rnd.Next(20, 46),
                     HeightCm = rnd.Next(155, 186),
                     WeightKg = rnd.Next(48, 95),
                     AppRoleId = userRoleId,
                     IsActive = true,
-                    CreatedAtUtc = DateTime.UtcNow.AddDays(-rnd.Next(60, 600)),
+                    CreatedAtUtc = RandomUtcBetween(fromUtc, toUtc, rnd),
                     Goal = PickOne(rnd, FitnessGoal.FatLoss, FitnessGoal.Maintain, FitnessGoal.MuscleGain),
                     ActivityLevel = PickOne(rnd, ActivityLevel.LightlyActive, ActivityLevel.ModeratelyActive, ActivityLevel.VeryActive),
                     DietPreference = PickOne(rnd, DietPreference.None, DietPreference.Vegan, DietPreference.Vegetarian, DietPreference.Keto, DietPreference.LowCarb),
@@ -464,11 +498,11 @@ public static class DatabaseSeeder
 
             db.Users.AddRange(users);
             await db.SaveChangesAsync();
-            Console.WriteLine($"[Seed] Added {toCreate} load-test users.");
+            Console.WriteLine($"[Seed] Added {toCreate} seeded customers.");
         }
 
         var existingShippers = await db.Users.CountAsync(u => u.AppRoleId == shipperRoleId);
-        var targetShippers = 8;
+        var targetShippers = 4;
         if (existingShippers < targetShippers)
         {
             var toCreate = targetShippers - existingShippers;
@@ -476,19 +510,20 @@ public static class DatabaseSeeder
             for (var i = 0; i < toCreate; i++)
             {
                 var idx = existingShippers + i + 1;
+                var gender = rnd.NextDouble() < 0.7 ? Gender.Male : Gender.Female;
                 shippers.Add(new User
                 {
                     Id = Guid.NewGuid(),
-                    Email = $"loadtest.shipper{idx:D3}@mealprep.local",
-                    FullName = $"Load Test Shipper {idx:D3}",
+                    Email = $"shipper{idx:D3}@mealprep.local",
+                    FullName = BuildRealisticFullName(rnd, gender),
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("Shipper@123"),
-                    Gender = Gender.Unknown,
+                    Gender = gender,
                     Age = rnd.Next(22, 40),
                     HeightCm = rnd.Next(160, 186),
                     WeightKg = rnd.Next(55, 90),
                     AppRoleId = shipperRoleId,
                     IsActive = true,
-                    CreatedAtUtc = DateTime.UtcNow.AddDays(-rnd.Next(30, 500)),
+                    CreatedAtUtc = RandomUtcBetween(fromUtc, toUtc, rnd),
                     Goal = FitnessGoal.Maintain,
                     ActivityLevel = ActivityLevel.VeryActive,
                     DietPreference = DietPreference.None,
@@ -498,8 +533,53 @@ public static class DatabaseSeeder
 
             db.Users.AddRange(shippers);
             await db.SaveChangesAsync();
-            Console.WriteLine($"[Seed] Added {toCreate} load-test shippers.");
+            Console.WriteLine($"[Seed] Added {toCreate} seeded shippers.");
         }
+    }
+
+    private static string BuildRealisticFullName(Random rnd, Gender gender)
+    {
+        var familyNames = new[] { "Nguyen", "Tran", "Le", "Pham", "Hoang", "Phan", "Vu", "Dang", "Bui", "Do" };
+        var middleNames = new[] { "Minh", "Thanh", "Ngoc", "Anh", "Duc", "Quoc", "Khanh", "Gia", "Thu", "Bao" };
+        var maleGivenNames = new[] { "Tuan", "Huy", "Kiet", "Phuc", "Long", "Nam", "Son", "Dat", "Khoa", "Hai" };
+        var femaleGivenNames = new[] { "Linh", "My", "Thao", "Nhi", "Trang", "Yen", "Huong", "Han", "Vy", "Chi" };
+        var neutralGivenNames = new[] { "An", "Ngan", "Binh", "Lam", "Quynh" };
+
+        var family = familyNames[rnd.Next(familyNames.Length)];
+        var middle = middleNames[rnd.Next(middleNames.Length)];
+        string given;
+
+        if (gender == Gender.Male)
+        {
+            given = maleGivenNames[rnd.Next(maleGivenNames.Length)];
+        }
+        else if (gender == Gender.Female)
+        {
+            given = femaleGivenNames[rnd.Next(femaleGivenNames.Length)];
+        }
+        else
+        {
+            given = neutralGivenNames[rnd.Next(neutralGivenNames.Length)];
+        }
+
+        return $"{family} {middle} {given}";
+    }
+
+    private static DateTime RandomUtcBetween(DateTime fromUtc, DateTime toUtc, Random rnd)
+    {
+        if (toUtc <= fromUtc)
+        {
+            return fromUtc;
+        }
+
+        var spanDays = (toUtc.Date - fromUtc.Date).Days;
+        var dayOffset = rnd.Next(0, spanDays + 1);
+        var date = fromUtc.Date.AddDays(dayOffset);
+        var hour = rnd.Next(7, 21);
+        var minute = rnd.Next(0, 60);
+        var second = rnd.Next(0, 60);
+        var candidate = new DateTime(date.Year, date.Month, date.Day, hour, minute, second, DateTimeKind.Utc);
+        return candidate > toUtc ? toUtc : candidate;
     }
 
     private static SubscriptionStatus ResolveSubscriptionStatus(DateOnly endDate, Random rnd)

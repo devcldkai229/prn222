@@ -64,6 +64,9 @@ public record StrategicMetricRow(
 public class AdminDashboardViewModel
 {
     public int SelectedDays { get; set; } = 30;
+    public DateOnly RangeStartDate { get; set; }
+    public DateOnly RangeEndDate { get; set; }
+    public bool IsCustomRange { get; set; }
 
     public decimal TodaysRevenue { get; set; }
     public decimal YesterdaysRevenue { get; set; }
@@ -105,7 +108,7 @@ public class AdminDashboardViewModel
 
 public interface IAdminDashboardService
 {
-    Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30);
+    Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30, DateOnly? fromDate = null, DateOnly? toDate = null);
 }
 
 // ── Implementation ────────────────────────────────────────────────────────────
@@ -116,15 +119,26 @@ public class AdminDashboardService : IAdminDashboardService
 
     public AdminDashboardService(AppDbContext ctx) => _ctx = ctx;
 
-    public async Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30)
+    public async Task<AdminDashboardViewModel> GetDashboardAsync(int days = 30, DateOnly? fromDate = null, DateOnly? toDate = null)
     {
-        days = days is 7 or 30 or 90 ? days : 30;
-
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var tomorrow = today.AddDays(1);
         var utcNow = DateTime.UtcNow;
-        var fromDateTime = utcNow.AddDays(-(days - 1));
-        var fromDateOnly = DateOnly.FromDateTime(fromDateTime);
+        var hasCustomRange = fromDate.HasValue && toDate.HasValue;
+        var selectedFromDate = hasCustomRange ? fromDate!.Value : today.AddDays(-(Math.Max(days, 1) - 1));
+        var selectedToDate = hasCustomRange ? toDate!.Value : today;
+
+        if (selectedFromDate > selectedToDate)
+        {
+            (selectedFromDate, selectedToDate) = (selectedToDate, selectedFromDate);
+        }
+
+        days = Math.Max(1, selectedToDate.DayNumber - selectedFromDate.DayNumber + 1);
+
+        var fromDateOnly = selectedFromDate;
+        var toDateOnly = selectedToDate;
+        var fromDateTime = DateTime.SpecifyKind(fromDateOnly.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        var toDateTimeExclusive = DateTime.SpecifyKind(toDateOnly.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
         var currentYear = utcNow.Year;
         var currentQuarter = ((utcNow.Month - 1) / 3) + 1;
 
@@ -138,34 +152,40 @@ public class AdminDashboardService : IAdminDashboardService
             .SumAsync(p => (decimal?)p.Amount) ?? 0m;
 
         var revenueInRange = await _ctx.Payments
-            .Where(p => p.Status == "Paid" && p.PaidAt.HasValue && p.PaidAt.Value >= fromDateTime)
+            .Where(p => p.Status == "Paid"
+                && p.PaidAt.HasValue
+                && p.PaidAt.Value >= fromDateTime
+                && p.PaidAt.Value < toDateTimeExclusive)
             .SumAsync(p => (decimal?)p.Amount) ?? 0m;
 
         var activeSubscriberCount = await _ctx.Subscriptions
             .CountAsync(s => s.Status == SubscriptionStatus.Active);
 
         var newUserCountInRange = await _ctx.Users
-            .CountAsync(u => u.CreatedAtUtc >= fromDateTime);
+            .CountAsync(u => u.CreatedAtUtc >= fromDateTime && u.CreatedAtUtc < toDateTimeExclusive);
 
         var totalOrdersInRange = await _ctx.Orders
-            .CountAsync(o => o.DeliveryDate >= DateOnly.FromDateTime(fromDateTime));
+            .CountAsync(o => o.DeliveryDate >= fromDateOnly && o.DeliveryDate <= toDateOnly);
 
         var deliveredOrdersInRange = await _ctx.Orders
-            .CountAsync(o => o.DeliveryDate >= DateOnly.FromDateTime(fromDateTime)
+            .CountAsync(o => o.DeliveryDate >= fromDateOnly
+                && o.DeliveryDate <= toDateOnly
                 && (o.Status == OrderStatus.Delivered
                     || o.Status == OrderStatus.ConfirmedByUser
                     || o.Status == OrderStatus.Completed));
 
         var cancelledOrdersInRange = await _ctx.Orders
-            .CountAsync(o => o.DeliveryDate >= DateOnly.FromDateTime(fromDateTime)
+            .CountAsync(o => o.DeliveryDate >= fromDateOnly
+                && o.DeliveryDate <= toDateOnly
                 && o.Status == OrderStatus.Cancelled);
 
         var paymentTotalInRange = await _ctx.Payments
             .CountAsync(p => p.CreatedAt >= fromDateTime
+                && p.CreatedAt < toDateTimeExclusive
                 && (p.Status == "Paid" || p.Status == "Failed" || p.Status == "Cancelled" || p.Status == "Expired"));
 
         var paymentPaidInRange = await _ctx.Payments
-            .CountAsync(p => p.CreatedAt >= fromDateTime && p.Status == "Paid");
+            .CountAsync(p => p.CreatedAt >= fromDateTime && p.CreatedAt < toDateTimeExclusive && p.Status == "Paid");
 
         var tomorrowOrderCount = await _ctx.Orders
             .CountAsync(o => o.DeliveryDate == tomorrow);
@@ -176,7 +196,10 @@ public class AdminDashboardService : IAdminDashboardService
             .SumAsync(oi => (int?)oi.Quantity) ?? 0;
 
         var revenueChartRaw = await _ctx.Payments
-            .Where(p => p.Status == "Paid" && p.PaidAt.HasValue && p.PaidAt.Value >= fromDateTime)
+            .Where(p => p.Status == "Paid"
+                && p.PaidAt.HasValue
+                && p.PaidAt.Value >= fromDateTime
+                && p.PaidAt.Value < toDateTimeExclusive)
             .GroupBy(p => p.PaidAt!.Value.Date)
             .Select(g => new { Date = g.Key, Total = g.Sum(p => p.Amount) })
             .OrderBy(x => x.Date)
@@ -185,7 +208,7 @@ public class AdminDashboardService : IAdminDashboardService
         var revenueMap = revenueChartRaw.ToDictionary(x => DateOnly.FromDateTime(x.Date), x => x.Total);
         var revenueSeries = new List<RevenueDataPoint>();
 
-        if (days == 90)
+        if (days >= 90)
         {
             // Group 90-day view into 3-day buckets so chart remains readable.
             for (var cursor = fromDateOnly; cursor <= today; cursor = cursor.AddDays(3))
@@ -233,7 +256,7 @@ public class AdminDashboardService : IAdminDashboardService
             .ToListAsync();
 
         var orderStatus = await _ctx.Orders
-            .Where(o => o.DeliveryDate >= DateOnly.FromDateTime(fromDateTime))
+            .Where(o => o.DeliveryDate >= fromDateOnly && o.DeliveryDate <= toDateOnly)
             .GroupBy(o => o.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToListAsync();
@@ -266,7 +289,8 @@ public class AdminDashboardService : IAdminDashboardService
             .Include(oi => oi.Order)
             .Include(oi => oi.Meal)
             .Where(oi => oi.Order != null
-                && oi.Order.DeliveryDate >= DateOnly.FromDateTime(fromDateTime)
+                && oi.Order.DeliveryDate >= fromDateOnly
+                && oi.Order.DeliveryDate <= toDateOnly
                 && oi.Meal != null)
             .GroupBy(oi => oi.Meal!.Name)
             .Select(g => new { Name = g.Key, Quantity = g.Sum(x => x.Quantity) })
@@ -276,7 +300,9 @@ public class AdminDashboardService : IAdminDashboardService
 
         var lowRatedMeals = await _ctx.MealRatings
             .Include(r => r.Meal)
-            .Where(r => r.CreatedAt >= fromDateTime && r.Meal != null)
+            .Where(r => r.CreatedAt >= fromDateTime
+                && r.CreatedAt < toDateTimeExclusive
+                && r.Meal != null)
             .GroupBy(r => r.Meal!.Name)
             .Select(g => new
             {
@@ -308,7 +334,8 @@ public class AdminDashboardService : IAdminDashboardService
 
         var topShippersInRange = await _ctx.Orders
             .Include(o => o.Shipper)
-            .Where(o => o.DeliveryDate >= DateOnly.FromDateTime(fromDateTime)
+            .Where(o => o.DeliveryDate >= fromDateOnly
+                && o.DeliveryDate <= toDateOnly
                 && o.ShipperId.HasValue
                 && (o.Status == OrderStatus.Delivered
                     || o.Status == OrderStatus.ConfirmedByUser
@@ -729,6 +756,9 @@ public class AdminDashboardService : IAdminDashboardService
         return new AdminDashboardViewModel
         {
             SelectedDays = days,
+            RangeStartDate = fromDateOnly,
+            RangeEndDate = toDateOnly,
+            IsCustomRange = hasCustomRange,
             TodaysRevenue = todaysRevenue,
             YesterdaysRevenue = yesterdaysRevenue,
             RevenueInRange = revenueInRange,

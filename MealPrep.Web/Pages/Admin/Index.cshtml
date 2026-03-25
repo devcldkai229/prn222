@@ -8,6 +8,9 @@
     var mode = (Model.Mode ?? "overview").Trim().ToLowerInvariant();
     var showOperations = mode is "overview" or "operations";
     var showStrategic = mode is "overview" or "strategic";
+    var hasCustomRange = d.IsCustomRange;
+    var fromValue = d.RangeStartDate.ToString("yyyy-MM-dd");
+    var toValue = d.RangeEndDate.ToString("yyyy-MM-dd");
 
     var revenueDelta = d.YesterdaysRevenue > 0
         ? ((d.TodaysRevenue - d.YesterdaysRevenue) / d.YesterdaysRevenue * 100m)
@@ -25,6 +28,14 @@
             "percent" => value.ToString("0.0") + "%",
             _ => value.ToString("N0"),
         };
+
+    string ModeHref(string key)
+        => hasCustomRange
+            ? $"?mode={key}&from={d.RangeStartDate:yyyy-MM-dd}&to={d.RangeEndDate:yyyy-MM-dd}"
+            : $"?mode={key}&days={d.SelectedDays}";
+
+    string DaysHref(int day)
+        => $"?mode={mode}&days={day}";
 }
 
 @section Styles {
@@ -41,6 +52,56 @@
                 radial-gradient(circle at 85% 25%, rgba(59, 130, 246, 0.17), transparent 32%),
                 linear-gradient(135deg, #f0fdf4, #eff6ff 60%, #f8fafc);
             border: 1px solid #dbeafe;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .hero-copy {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 100%;
+        }
+
+        .hero-controls {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: .75rem;
+        }
+
+        .hero-control-card {
+            border: 1px solid rgba(255, 255, 255, .95);
+            background: rgba(255, 255, 255, .88);
+            border-radius: 1rem;
+            padding: .625rem;
+        }
+
+        .range-form-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: .5rem;
+        }
+
+        .range-input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        @@media (min-width: 1024px) {
+            .hero-grid {
+                grid-template-columns: minmax(0, 1fr) 42rem;
+                gap: 1.25rem;
+            }
+
+            .range-form-grid {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+                align-items: end;
+            }
         }
 
         .metric-label {
@@ -75,28 +136,46 @@
 
 <div class="space-y-6">
     <section class="hero-band rounded-3xl px-6 py-5 lg:px-8 lg:py-6">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
+        <div class="hero-grid">
+            <div class="hero-copy">
                 <p class="text-xs font-semibold tracking-[.15em] text-emerald-700 uppercase">Operations Intelligence</p>
                 <h1 class="text-2xl lg:text-3xl font-extrabold text-slate-900 mt-1">Admin Dashboard</h1>
                 <p class="text-sm text-slate-600 mt-2">Giảm nhiễu thông tin bằng cách chuyển chế độ xem theo nhu cầu vận hành hoặc chiến lược.</p>
             </div>
 
-            <div class="flex flex-col gap-2">
-                <div class="flex items-center gap-2 rounded-2xl bg-white/90 p-2 border border-white">
-                    <a href="?mode=overview&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("overview")">Toàn cảnh</a>
-                    <a href="?mode=operations&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("operations")">Vận hành</a>
-                    <a href="?mode=strategic&days=@d.SelectedDays" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("strategic")">Chiến lược</a>
+            <div class="hero-controls">
+                <div class="hero-control-card flex flex-wrap items-center gap-2">
+                    <a href="@ModeHref("overview")" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("overview")">Tổng quan</a>
+                    <a href="@ModeHref("operations")" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("operations")">Hằng ngày</a>
+                    <a href="@ModeHref("strategic")" class="px-3 py-1.5 rounded-xl text-sm font-semibold @ModeClass("strategic")">Dài hạn</a>
                 </div>
 
                 @if (showOperations)
                 {
-                    <div class="flex items-center gap-2 rounded-2xl bg-white/90 p-2 border border-white justify-end">
-                        <span class="text-xs font-semibold text-slate-500 px-2">Khung thời gian</span>
-                        <a href="?mode=@mode&days=7" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 7 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">7 ngày</a>
-                        <a href="?mode=@mode&days=30" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 30 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">30 ngày</a>
-                        <a href="?mode=@mode&days=90" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(d.SelectedDays == 90 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">90 ngày</a>
+                    <form method="get" class="hero-control-card range-form-grid">
+                        <input type="hidden" name="mode" value="@mode" />
+                        <div>
+                            <label for="from-date" class="block text-xs font-semibold text-slate-500 px-1 mb-1">Từ ngày</label>
+                            <input id="from-date" type="date" name="from" value="@fromValue" class="range-input px-2.5 py-1.5 rounded-xl text-sm bg-white text-slate-800 border border-slate-300" />
+                        </div>
+                        <div>
+                            <label for="to-date" class="block text-xs font-semibold text-slate-500 px-1 mb-1">Đến ngày</label>
+                            <input id="to-date" type="date" name="to" value="@toValue" class="range-input px-2.5 py-1.5 rounded-xl text-sm bg-white text-slate-800 border border-slate-300" />
+                        </div>
+                        <button type="submit" class="px-4 py-1.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white border border-emerald-700 h-[38px]">Áp dụng</button>
+                    </form>
+
+                    <div class="hero-control-card flex flex-wrap items-center gap-2 lg:justify-end">
+                        <span class="text-xs font-semibold text-slate-500 px-2 min-w-[96px]">Khung thời gian</span>
+                        <a href="@DaysHref(7)" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(!hasCustomRange && d.SelectedDays == 7 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">7 ngày</a>
+                        <a href="@DaysHref(30)" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(!hasCustomRange && d.SelectedDays == 30 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">30 ngày</a>
+                        <a href="@DaysHref(90)" class="px-3 py-1.5 rounded-xl text-sm font-semibold @(!hasCustomRange && d.SelectedDays == 90 ? "bg-emerald-600 text-white border border-emerald-700" : "bg-slate-100 text-slate-800 border border-slate-300")">90 ngày</a>
                     </div>
+
+                    @if (hasCustomRange)
+                    {
+                        <p class="text-xs text-slate-600 text-right">Đang lọc theo khoảng: <span class="font-semibold">@d.RangeStartDate.ToString("dd/MM/yyyy") - @d.RangeEndDate.ToString("dd/MM/yyyy")</span></p>
+                    }
                 }
             </div>
         </div>

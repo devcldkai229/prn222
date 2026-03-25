@@ -18,14 +18,25 @@ public class IndexModel : PageModel
     [BindProperty(SupportsGet = true)]
     public int Days { get; set; } = 30;
 
+    [BindProperty(SupportsGet = true, Name = "from")]
+    public DateOnly? FromDate { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "to")]
+    public DateOnly? ToDate { get; set; }
+
     [BindProperty(SupportsGet = true)]
     public string Mode { get; set; } = "overview";
 
     public async Task<IActionResult> OnGetAsync()
     {
-        if (Days is not (7 or 30 or 90))
+        if (Days <= 0)
         {
             Days = 30;
+        }
+
+        if (FromDate.HasValue && ToDate.HasValue && FromDate > ToDate)
+        {
+            (FromDate, ToDate) = (ToDate, FromDate);
         }
 
         Mode = (Mode ?? "overview").Trim().ToLowerInvariant();
@@ -34,7 +45,7 @@ public class IndexModel : PageModel
             Mode = "overview";
         }
 
-        Dashboard = await _dashboardService.GetDashboardAsync(Days);
+        Dashboard = await _dashboardService.GetDashboardAsync(Days, FromDate, ToDate);
         return Page();
     }
 }
